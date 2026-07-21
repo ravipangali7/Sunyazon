@@ -225,7 +225,13 @@ function HelpdeskSection({ onFlash }: { onFlash: (m: string | null) => void }) {
       extra?: Record<string, unknown>;
     }) => itApi.ticketAction(id, action, extra),
     onSuccess: (_d, vars) => {
-      onFlash(`Ticket ${vars.action}d.`);
+      const labels: Record<TicketAction, string> = {
+        assign: "assigned",
+        start: "started",
+        resolve: "resolved",
+        close: "closed",
+      };
+      onFlash(`Ticket ${labels[vars.action]}.`);
       invalidate();
       setAssigning(null);
     },

@@ -164,18 +164,20 @@ function ProcessPage() {
   return (
     <AppShell
       title={metaTitle}
-      subtitle={metaSubtitle}
-      roleBadge={dash?.meta?.role_label || dash?.role?.name}
-      unreadCount={dash?.notifications?.unread_count}
-      departmentModules={dash?.modules}
+      subtitle={
+        [
+          metaSubtitle,
+          dash?.meta?.role_label || dash?.role?.name,
+          dash?.company?.name,
+          dash?.module?.name,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      }
       actions={
         <div className="hidden lg:flex items-center gap-2 text-[11px] text-muted-foreground">
-          {dash?.company?.name && <span className="truncate max-w-[140px]">{dash.company.name}</span>}
-          {dash?.module?.name && (
-            <>
-              <span>·</span>
-              <span>{dash.module.name}</span>
-            </>
+          {(dash?.notifications?.unread_count ?? 0) > 0 && (
+            <span className="tabular-nums">{dash?.notifications?.unread_count} unread</span>
           )}
         </div>
       }

@@ -141,7 +141,10 @@ export const maintenanceApi = {
   deleteWorkOrder: (id: string) =>
     apiFetch<{ ok: boolean }>(`/maintenance/work-orders/${id}/detail/`, { method: "DELETE" }),
   /** Close uses legacy FBV; approve/start use detail action endpoint. */
-  woAction: (id: string, action: "approve" | "start" | "close" | "in_progress") => {
+  woAction: async (
+    id: string,
+    action: "approve" | "start" | "close" | "in_progress",
+  ): Promise<{ ok?: boolean; id?: string; status?: string } & Partial<MaintenanceWorkOrder>> => {
     if (action === "close") {
       return apiFetch<{ ok: boolean; id?: string; status?: string }>(
         `/maintenance/work-orders/${id}/`,

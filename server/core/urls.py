@@ -9,6 +9,15 @@ from core.views_auth import (
     PortalView,
     RegisterView,
 )
+from core.views_customer import (
+    CustomerAddressDetailView,
+    CustomerAddressesView,
+    CustomerNearestShopsView,
+    CustomerOptionsView,
+    CustomerOrderDetailView,
+    CustomerOrdersView,
+    CustomerOverviewView,
+)
 from core.views_company import (
     CompanyLookupView,
     CompanyRegistrationOptionsView,
@@ -22,6 +31,14 @@ from core.views_company import (
     JobVacancyDetailView,
     LeadershipView,
     ShareholdersView,
+)
+from core.views_docs import (
+    DocsDocumentDetailView,
+    DocsDocumentsView,
+    DocsOptionsView,
+    DocsOverviewView,
+    DocsTemplateDetailView,
+    DocsTemplatesView,
 )
 from core.views_hr import (
     HRAttendanceDetailView,
@@ -249,6 +266,16 @@ from core.views_procurement import (
     ProcurementVendorDetailView,
     ProcurementVendorsView,
 )
+from core.views_media import (
+    MediaAssetDetailView,
+    MediaAssetsView,
+    MediaLiveStreamDetailView,
+    MediaLiveStreamsView,
+    MediaOptionsView,
+    MediaOverviewView,
+    MediaPlaylistDetailView,
+    MediaPlaylistsView,
+)
 from core.views_domain_fbv import (
     auth_kyc_verify,
     chat_messages,
@@ -275,6 +302,15 @@ from core.views_domain_fbv import (
     stock_ledger_post,
     stock_reorder_pr,
     work_order_action,
+)
+from core.views_payments import (
+    PaymentsCampaignDetailView,
+    PaymentsCampaignsView,
+    PaymentsGatewaysView,
+    PaymentsOptionsView,
+    PaymentsOverviewView,
+    PaymentsTransactionDetailView,
+    PaymentsTransactionsView,
 )
 
 urlpatterns = [
@@ -860,7 +896,46 @@ urlpatterns = [
         name="process-run-stage-action",
     ),
     path("media/", MediaView.as_view(), name="media"),
+    path("media/overview/", MediaOverviewView.as_view(), name="media-overview"),
+    path("media/options/", MediaOptionsView.as_view(), name="media-options"),
+    path("media/assets/", MediaAssetsView.as_view(), name="media-assets"),
+    path(
+        "media/assets/<uuid:asset_id>/",
+        MediaAssetDetailView.as_view(),
+        name="media-asset-detail",
+    ),
+    path("media/live/", MediaLiveStreamsView.as_view(), name="media-live"),
+    path(
+        "media/live/<uuid:stream_id>/",
+        MediaLiveStreamDetailView.as_view(),
+        name="media-live-detail",
+    ),
+    path("media/playlists/", MediaPlaylistsView.as_view(), name="media-playlists"),
+    path(
+        "media/playlists/<uuid:playlist_id>/",
+        MediaPlaylistDetailView.as_view(),
+        name="media-playlist-detail",
+    ),
     path("payments/", PaymentsView.as_view(), name="payments"),
+    path("payments/overview/", PaymentsOverviewView.as_view(), name="payments-overview"),
+    path("payments/options/", PaymentsOptionsView.as_view(), name="payments-options"),
+    path("payments/gateways/", PaymentsGatewaysView.as_view(), name="payments-gateways"),
+    path(
+        "payments/transactions/",
+        PaymentsTransactionsView.as_view(),
+        name="payments-transactions",
+    ),
+    path(
+        "payments/transactions/<uuid:txn_id>/",
+        PaymentsTransactionDetailView.as_view(),
+        name="payments-transaction-detail",
+    ),
+    path("payments/campaigns/", PaymentsCampaignsView.as_view(), name="payments-campaigns"),
+    path(
+        "payments/campaigns/<uuid:campaign_id>/",
+        PaymentsCampaignDetailView.as_view(),
+        name="payments-campaign-detail",
+    ),
     path("governance/", GovernanceView.as_view(), name="governance"),
     path("audit/", AuditView.as_view(), name="audit"),
     path("auth-kyc/", AuthKycView.as_view(), name="auth-kyc"),
@@ -872,7 +947,36 @@ urlpatterns = [
     path("it/tickets/<uuid:ticket_id>/", ItTicketDetailView.as_view(), name="it-ticket-detail"),
     path("it/sessions/", ItSessionsView.as_view(), name="it-sessions"),
     path("docs/", DocsView.as_view(), name="docs"),
+    path("docs/overview/", DocsOverviewView.as_view(), name="docs-overview"),
+    path("docs/options/", DocsOptionsView.as_view(), name="docs-options"),
+    path("docs/documents/", DocsDocumentsView.as_view(), name="docs-documents"),
+    path(
+        "docs/documents/<uuid:doc_id>/",
+        DocsDocumentDetailView.as_view(),
+        name="docs-document-detail",
+    ),
+    path("docs/templates/", DocsTemplatesView.as_view(), name="docs-templates"),
+    path(
+        "docs/templates/<uuid:template_id>/",
+        DocsTemplateDetailView.as_view(),
+        name="docs-template-detail",
+    ),
     path("customer/", CustomerView.as_view(), name="customer"),
+    path("customer/overview/", CustomerOverviewView.as_view(), name="customer-overview"),
+    path("customer/options/", CustomerOptionsView.as_view(), name="customer-options"),
+    path("customer/orders/", CustomerOrdersView.as_view(), name="customer-orders"),
+    path(
+        "customer/orders/<uuid:order_id>/",
+        CustomerOrderDetailView.as_view(),
+        name="customer-order-detail",
+    ),
+    path("customer/addresses/", CustomerAddressesView.as_view(), name="customer-addresses"),
+    path(
+        "customer/addresses/<uuid:address_id>/",
+        CustomerAddressDetailView.as_view(),
+        name="customer-address-detail",
+    ),
+    path("customer/nearest/", CustomerNearestShopsView.as_view(), name="customer-nearest"),
     path("rnd/", RndView.as_view(), name="rnd"),
     path("rnd/overview/", RndOverviewView.as_view(), name="rnd-overview"),
     path("rnd/options/", RndOptionsView.as_view(), name="rnd-options"),

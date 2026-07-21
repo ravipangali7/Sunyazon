@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { statusColor, priorityColor, type StatusKey, type PriorityKey } from "@/lib/colors";
+import { statusColor, priorityColor, type StatusKey } from "@/lib/colors";
 
 function chip(color: string, children: ReactNode) {
   return (
@@ -18,8 +18,9 @@ export function StatusBadge({ status }: { status: string }) {
   return chip(color, status.replaceAll("_", " "));
 }
 
-export function PriorityBadge({ priority }: { priority: PriorityKey }) {
-  return chip(priorityColor[priority] ?? "#8AB4C8", priority);
+export function PriorityBadge({ priority }: { priority: string }) {
+  const color = (priorityColor as Record<string, string>)[priority] ?? "#8AB4C8";
+  return chip(color, priority);
 }
 
 export function Tag({ children, tone = "muted" }: { children: ReactNode; tone?: "muted" | "brand" }) {

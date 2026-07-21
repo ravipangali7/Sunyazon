@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Run create_superuser + seed_geo + seed_core + seed_demo in order."
+    help = "Run create_superuser + seed_geo + seed_core + seed_demo + seed_modules + seed_enterprise + seed_menus."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -58,11 +58,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.MIGRATE_HEADING("4/6  seed_demo"))
             call_command("seed_demo")
 
-        self.stdout.write(self.style.MIGRATE_HEADING("5/6  seed_modules"))
+        self.stdout.write(self.style.MIGRATE_HEADING("5/7  seed_modules"))
         call_command("seed_modules")
 
-        self.stdout.write(self.style.MIGRATE_HEADING("6/6  seed_enterprise"))
+        self.stdout.write(self.style.MIGRATE_HEADING("6/7  seed_enterprise"))
         call_command("seed_enterprise")
+
+        self.stdout.write(self.style.MIGRATE_HEADING("7/7  seed_menus"))
+        call_command("seed_menus")
 
         self.stdout.write(self.style.SUCCESS(
             "\nAll seeders finished.\n"
