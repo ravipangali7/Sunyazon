@@ -17,17 +17,49 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_dotenv(path: Path) -> None:
+    """Load KEY=VALUE pairs from a .env file into os.environ (no override)."""
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("'").strip('"')
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_dotenv(BASE_DIR / ".env")
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-i1opg4j^t(ko$3-ss0wsnes9^nr8)k&el5s&4q4uc&c-lvc0)&'
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-insecure-i1opg4j^t(ko$3-ss0wsnes9^nr8)k&el5s&4q4uc&c-lvc0)&",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True").lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = ['*']
+BACKEND_URL = os.environ.get(
+    "BACKEND_URL", "https://serversunyazon.infelogroup.com"
+).rstrip("/")
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL", "https://sunyazon.infelogroup.com"
+).rstrip("/")
 
+_allowed = os.environ.get("ALLOWED_HOSTS", "*").strip()
+ALLOWED_HOSTS = (
+    ["*"]
+    if _allowed == "*"
+    else [h.strip() for h in _allowed.split(",") if h.strip()]
+)
 
 # Application definition
 
@@ -65,7 +97,20 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
 }
-CORS_ALLOW_ALL_ORIGINS = True
+_cors_origins = os.environ.get("CORS_ALLOWED_ORIGINS", FRONTEND_URL).strip()
+if _cors_origins == "*":
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        o.strip() for o in _cors_origins.split(",") if o.strip()
+    ]
+
+_csrf = os.environ.get(
+    "CSRF_TRUSTED_ORIGINS",
+    f"{FRONTEND_URL},{BACKEND_URL}",
+).strip()
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf.split(",") if o.strip()]
 
 AUTH_USER_MODEL = 'core.User'
 
