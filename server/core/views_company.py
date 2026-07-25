@@ -27,6 +27,7 @@ from core.services.company_registration_service import (
     ensure_leadership_role_definitions,
     register_existing_company,
     register_new_company,
+    register_non_pvt_ltd_company,
     serialize_leadership_seat,
     serialize_organization_registration,
     serialize_shareholder,
@@ -85,27 +86,22 @@ class CompanyRegistrationOptionsView(APIView):
                 ],
                 "registration_modes": [
                     {
-                        "value": "already_registered",
-                        "label": "Already Registered Company",
+                        "value": "pvt_ltd",
+                        "label": "Private Limited (PVT LTD)",
                         "fields": [
-                            "pan_number",
-                            "registration_certificate",
                             "total_capital",
                             "shareholders",
                             "niyamawali",
                             "prabandhapatra",
-                            "share_allocation",
-                            "documents",
                         ],
                     },
                     {
-                        "value": "new_company",
-                        "label": "New Company",
+                        "value": "non_pvt_ltd",
+                        "label": "Non-Private Limited (Non-PVT LTD)",
                         "fields": [
-                            "total_capital",
-                            "shareholders",
-                            "niyamawali",
-                            "prabandhapatra",
+                            "company_name",
+                            "pan_number",
+                            "managing_director_name",
                         ],
                     },
                 ],
@@ -143,7 +139,7 @@ class CompanyRegistrationOptionsView(APIView):
 
 
 class CompanyRegistrationView(APIView):
-    """Submit Already Registered / New Company registration for business accounts."""
+    """Submit Private Limited / Non-Private Limited registration for business accounts."""
 
     authentication_classes = [SessionTokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -168,7 +164,35 @@ class CompanyRegistrationView(APIView):
         shareholders = _parse_json_list(data.get("shareholders"))
 
         try:
-            if mode in ("already_registered", Organization.RegistrationMode.ALREADY_REGISTERED):
+            if mode in ("pvt_ltd", Organization.RegistrationMode.PVT_LTD, "new_company"):
+                org = register_new_company(
+                    user=request.user,
+                    account_type=account_type,
+                    company_name=data.get("company_name") or "",
+                    total_capital=_decimal(data.get("total_capital")),
+                    address=data.get("address") or "",
+                    official_phone=data.get("official_phone") or "",
+                    official_email=data.get("official_email") or "",
+                    shareholders=shareholders,
+                    actor=request.user,
+                )
+            elif mode in ("non_pvt_ltd", Organization.RegistrationMode.NON_PVT_LTD):
+                org = register_non_pvt_ltd_company(
+                    user=request.user,
+                    account_type=account_type,
+                    company_name=data.get("company_name") or "",
+                    pan_number=data.get("pan_number") or data.get("vat_pan_no") or "",
+                    managing_director_name=data.get("managing_director_name")
+                    or data.get("md_name")
+                    or data.get("md")
+                    or "",
+                    address=data.get("address") or "",
+                    official_phone=data.get("official_phone") or "",
+                    official_email=data.get("official_email") or "",
+                    actor=request.user,
+                )
+            elif mode in ("already_registered", Organization.RegistrationMode.ALREADY_REGISTERED):
+                # Legacy path kept for older clients
                 org = register_existing_company(
                     user=request.user,
                     account_type=account_type,
@@ -195,22 +219,10 @@ class CompanyRegistrationView(APIView):
                     ],
                     actor=request.user,
                 )
-            elif mode in ("new_company", Organization.RegistrationMode.NEW_COMPANY):
-                org = register_new_company(
-                    user=request.user,
-                    account_type=account_type,
-                    company_name=data.get("company_name") or "",
-                    total_capital=_decimal(data.get("total_capital")),
-                    address=data.get("address") or "",
-                    official_phone=data.get("official_phone") or "",
-                    official_email=data.get("official_email") or "",
-                    shareholders=shareholders,
-                    actor=request.user,
-                )
             else:
                 return Response(
                     {
-                        "detail": "Choose Already Registered Company or New Company.",
+                        "detail": "Choose Private Limited (PVT LTD) or Non-Private Limited (Non-PVT LTD).",
                         "code": "mode_required",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -599,6 +611,13 @@ class JobVacanciesView(DomainAuthMixin, APIView):
 
         n = JobVacancy.objects.filter(organization=org).count() + 1
         code = data.get("vacancy_code") or f"VAC-{timezone.now():%Y%m%d}-{n:03d}"
+        hiring_manager = None
+        if data.get("hiring_manager_id"):
+            from core.models import Employee
+
+            hiring_manager = Employee.objects.filter(
+                pk=data["hiring_manager_id"], organization=org
+            ).first()
         vacancy = JobVacancy.objects.create(
             vacancy_code=code,
             organization=org,
@@ -607,6 +626,7 @@ class JobVacanciesView(DomainAuthMixin, APIView):
             description=data.get("description") or "",
             open_date=data.get("open_date") or timezone.now().date(),
             close_date=data.get("close_date") or None,
+            hiring_manager=hiring_manager,
             status=JobVacancy.Status.DRAFT,
         )
         if data.get("publish"):

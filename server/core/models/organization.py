@@ -67,6 +67,9 @@ class Organization(TenantScopedModel, TimeStampedModel):
         CUSTOM = "custom", "Custom"
 
     class RegistrationMode(models.TextChoices):
+        PVT_LTD = "pvt_ltd", "Private Limited (PVT LTD)"
+        NON_PVT_LTD = "non_pvt_ltd", "Non-Private Limited (Non-PVT LTD)"
+        # Legacy values kept for existing rows
         ALREADY_REGISTERED = "already_registered", "Already Registered Company"
         NEW_COMPANY = "new_company", "New Company"
 
@@ -125,6 +128,11 @@ class Organization(TenantScopedModel, TimeStampedModel):
         decimal_places=2,
         default=0,
         help_text="Authorized / total capital in NPR.",
+    )
+    managing_director_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Managing Director name (used for Non-PVT LTD registration).",
     )
     registration_certificate = models.FileField(
         upload_to="organizations/registration_certificates/",

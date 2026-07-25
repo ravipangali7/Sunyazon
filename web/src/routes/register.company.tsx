@@ -19,14 +19,15 @@ export const Route = createFileRoute("/register/company")({
       { title: "Company Registration — Sunyazon BEOS" },
       {
         name: "description",
-        content: "Register an existing or new company for Producer, Distributor, Wholesaler, or Retailer accounts.",
+        content:
+          "Register a Private Limited (PVT LTD) or Non-Private Limited company for Producer, Distributor, Wholesaler, or Retailer accounts.",
       },
     ],
   }),
   component: CompanyRegistrationPage,
 });
 
-type Mode = "already_registered" | "new_company";
+type Mode = "pvt_ltd" | "non_pvt_ltd";
 
 type ShareholderRow = ShareholderInput & { key: string };
 
@@ -42,14 +43,12 @@ function CompanyRegistrationPage() {
   const { user, loading, refresh } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [mode, setMode] = useState<Mode>("new_company");
+  const [mode, setMode] = useState<Mode>("pvt_ltd");
   const [companyName, setCompanyName] = useState("");
   const [pan, setPan] = useState("");
+  const [mdName, setMdName] = useState("");
   const [totalCapital, setTotalCapital] = useState("");
   const [address, setAddress] = useState("");
-  const [regCert, setRegCert] = useState<File | null>(null);
-  const [shareAlloc, setShareAlloc] = useState<File | null>(null);
-  const [extraDocs, setExtraDocs] = useState<File[]>([]);
   const [shareholders, setShareholders] = useState<ShareholderRow[]>([
     { ...emptyShareholder(), is_default: true },
   ]);
@@ -76,10 +75,10 @@ function CompanyRegistrationPage() {
   }, [loading, user, navigate]);
 
   const steps = useMemo(() => {
-    const base = ["Company type", "Company details", "Shareholders"];
-    if (mode === "already_registered") base.push("Documents");
-    base.push("Review");
-    return base;
+    if (mode === "non_pvt_ltd") {
+      return ["Company type", "Company details", "Review"];
+    }
+    return ["Company type", "Company details", "Shareholders", "Review"];
   }, [mode]);
 
   async function lookupPan() {
@@ -116,25 +115,27 @@ function CompanyRegistrationPage() {
     setSubmitting(true);
     try {
       if (!companyName.trim()) throw new Error("Company name is required.");
-      if (mode === "already_registered" && !pan.trim()) {
-        throw new Error("PAN number is required for already-registered companies.");
+      if (mode === "non_pvt_ltd") {
+        if (!pan.trim()) throw new Error("PAN number is required for Non-PVT LTD companies.");
+        if (!mdName.trim()) throw new Error("Managing Director (MD) is required.");
       }
       const res = await companyApi.register({
         account_type: user.account_type,
         registration_mode: mode,
         company_name: companyName.trim(),
         pan_number: pan.trim() || undefined,
-        total_capital: totalCapital || "0",
-        address,
-        shareholders: shareholders.map(({ full_name, share_units, percentage, is_default }) => ({
-          full_name,
-          share_units,
-          percentage,
-          is_default,
-        })),
-        registration_certificate: regCert,
-        share_allocation: shareAlloc,
-        documents: extraDocs,
+        managing_director_name: mode === "non_pvt_ltd" ? mdName.trim() : undefined,
+        total_capital: mode === "pvt_ltd" ? totalCapital || "0" : undefined,
+        address: mode === "pvt_ltd" ? address : undefined,
+        shareholders:
+          mode === "pvt_ltd"
+            ? shareholders.map(({ full_name, share_units, percentage, is_default }) => ({
+                full_name,
+                share_units,
+                percentage,
+                is_default,
+              }))
+            : undefined,
       });
       await refresh();
       const redirect =
@@ -150,6 +151,8 @@ function CompanyRegistrationPage() {
 
   const inputClass =
     "w-full h-11 px-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 outline-none focus:border-[#F25C05]/70";
+
+  const reviewStep = steps.length - 1;
 
   if (loading || !user) {
     return (
@@ -214,67 +217,50 @@ function CompanyRegistrationPage() {
               <h2 className="text-lg font-semibold text-white">Choose registration type</h2>
               <button
                 type="button"
-                onClick={() => setMode("already_registered")}
+                onClick={() => {
+                  setMode("pvt_ltd");
+                  setStep(0);
+                }}
                 className={`w-full text-left p-4 rounded-xl border transition ${
-                  mode === "already_registered"
+                  mode === "pvt_ltd"
                     ? "border-[#F25C05]/60 bg-[#F25C05]/10"
                     : "border-white/10 hover:border-white/25"
                 }`}
               >
                 <div className="flex items-center gap-3 text-white font-semibold">
                   <Building2 className="h-5 w-5 text-[#F25C05]" />
-                  Already Registered Company
+                  Private Limited (PVT LTD)
                 </div>
                 <p className="mt-1 text-xs text-white/45 pl-8">
-                  PAN, registration certificate, capital, shareholders, Niyamawali, Prabandhapatra,
-                  share allocation & documents
+                  Total capital, shareholders, Niyamawali & Prabandhapatra (drafted from templates)
                 </p>
               </button>
               <button
                 type="button"
-                onClick={() => setMode("new_company")}
+                onClick={() => {
+                  setMode("non_pvt_ltd");
+                  setStep(0);
+                }}
                 className={`w-full text-left p-4 rounded-xl border transition ${
-                  mode === "new_company"
+                  mode === "non_pvt_ltd"
                     ? "border-[#F25C05]/60 bg-[#F25C05]/10"
                     : "border-white/10 hover:border-white/25"
                 }`}
               >
                 <div className="flex items-center gap-3 text-white font-semibold">
                   <FileText className="h-5 w-5 text-[#F25C05]" />
-                  New Company
+                  Non-Private Limited (Non-PVT LTD)
                 </div>
                 <p className="mt-1 text-xs text-white/45 pl-8">
-                  Total capital, shareholders, Niyamawali & Prabandhapatra (drafted from templates)
+                  Name, PAN number, and Managing Director (MD)
                 </p>
               </button>
             </div>
           )}
 
-          {step === 1 && (
+          {step === 1 && mode === "pvt_ltd" && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-white">Company details</h2>
-              {mode === "already_registered" && (
-                <>
-                  <label className="block text-xs text-white/60">PAN Number</label>
-                  <div className="flex gap-2">
-                    <input
-                      className={inputClass}
-                      value={pan}
-                      onChange={(e) => setPan(e.target.value)}
-                      placeholder="e.g. 601234567"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void lookupPan()}
-                      className="h-11 px-4 rounded-xl text-sm font-semibold shrink-0"
-                      style={{ background: "#F25C05", color: "#111" }}
-                    >
-                      Lookup
-                    </button>
-                  </div>
-                  {lookupMsg && <p className="text-xs text-[#FF8A3D]">{lookupMsg}</p>}
-                </>
-              )}
               <label className="block text-xs text-white/60">Company name</label>
               <input
                 className={inputClass}
@@ -301,7 +287,45 @@ function CompanyRegistrationPage() {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 1 && mode === "non_pvt_ltd" && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-white">Company details</h2>
+              <label className="block text-xs text-white/60">Name</label>
+              <input
+                className={inputClass}
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Company / organization name"
+              />
+              <label className="block text-xs text-white/60">PAN Number</label>
+              <div className="flex gap-2">
+                <input
+                  className={inputClass}
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value)}
+                  placeholder="e.g. 601234567"
+                />
+                <button
+                  type="button"
+                  onClick={() => void lookupPan()}
+                  className="h-11 px-4 rounded-xl text-sm font-semibold shrink-0"
+                  style={{ background: "#F25C05", color: "#111" }}
+                >
+                  Lookup
+                </button>
+              </div>
+              {lookupMsg && <p className="text-xs text-[#FF8A3D]">{lookupMsg}</p>}
+              <label className="block text-xs text-white/60">MD (Managing Director)</label>
+              <input
+                className={inputClass}
+                value={mdName}
+                onChange={(e) => setMdName(e.target.value)}
+                placeholder="Managing Director full name"
+              />
+            </div>
+          )}
+
+          {step === 2 && mode === "pvt_ltd" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -374,52 +398,35 @@ function CompanyRegistrationPage() {
             </div>
           )}
 
-          {step === 3 && mode === "already_registered" && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">Documents</h2>
-              <label className="block text-xs text-white/60">Company Registration Certificate</label>
-              <input
-                type="file"
-                accept=".pdf,image/*"
-                className="text-sm text-white/70"
-                onChange={(e) => setRegCert(e.target.files?.[0] || null)}
-              />
-              <label className="block text-xs text-white/60">Share Allocation</label>
-              <input
-                type="file"
-                accept=".pdf,image/*"
-                className="text-sm text-white/70"
-                onChange={(e) => setShareAlloc(e.target.files?.[0] || null)}
-              />
-              <label className="block text-xs text-white/60">Additional documents</label>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,image/*"
-                className="text-sm text-white/70"
-                onChange={(e) => setExtraDocs(Array.from(e.target.files || []))}
-              />
-              <p className="text-xs text-white/40">
-                Niyamawali and Prabandhapatra drafts are created automatically from system templates.
-                You can edit and print them from Governance after registration.
-              </p>
-            </div>
-          )}
-
-          {((step === 3 && mode === "new_company") ||
-            (step === 4 && mode === "already_registered")) && (
+          {step === reviewStep && (
             <div className="space-y-3 text-sm text-white/80">
               <h2 className="text-lg font-semibold text-white">Review</h2>
-              <Row label="Mode" value={mode === "new_company" ? "New Company" : "Already Registered"} />
-              <Row label="Company" value={companyName || "—"} />
-              {mode === "already_registered" && <Row label="PAN" value={pan || "—"} />}
-              <Row label="Total capital" value={totalCapital ? `NPR ${totalCapital}` : "—"} />
-              <Row label="Shareholders" value={`${shareholders.length}`} />
               <Row
-                label="Leadership"
-                value="CEO/MD → CFO, CMO, COO, CTO + HR department (auto-provisioned)"
+                label="Type"
+                value={
+                  mode === "pvt_ltd"
+                    ? "Private Limited (PVT LTD)"
+                    : "Non-Private Limited (Non-PVT LTD)"
+                }
               />
-              <Row label="Governance docs" value="Niyamawali + Prabandhapatra drafts" />
+              <Row label="Name" value={companyName || "—"} />
+              {mode === "non_pvt_ltd" && (
+                <>
+                  <Row label="PAN" value={pan || "—"} />
+                  <Row label="MD" value={mdName || "—"} />
+                </>
+              )}
+              {mode === "pvt_ltd" && (
+                <>
+                  <Row label="Total capital" value={totalCapital ? `NPR ${totalCapital}` : "—"} />
+                  <Row label="Shareholders" value={`${shareholders.length}`} />
+                  <Row
+                    label="Leadership"
+                    value="CEO/MD → CFO, CMO, COO, CTO + HR department (auto-provisioned)"
+                  />
+                  <Row label="Governance docs" value="Niyamawali + Prabandhapatra drafts" />
+                </>
+              )}
             </div>
           )}
 

@@ -12,6 +12,62 @@ export type Paginated<T> = {
   total_pages: number;
 };
 
+export type HROption = { value: string; label: string };
+
+export type HRSalary = {
+  id?: string;
+  employee_id?: string;
+  basic: number;
+  da: number;
+  grade_allowance: number;
+  shift_allowance: number;
+  meal_allowance: number;
+  transport_allowance: number;
+  other_allowances: number;
+  deductions: number;
+  ot_rate_per_hour: number;
+  total_allowances?: number;
+  currency_code: string;
+  effective_from: string | null;
+  notes: string;
+};
+
+export type HRScoring = {
+  id: string;
+  applicant_id: string;
+  applicant_name: string;
+  vacancy_title: string;
+  interviewer_id: string | null;
+  interviewer_name: string;
+  score: number;
+  remarks: string;
+  status: string;
+};
+
+export type HRTrainingModule = {
+  id: string;
+  code: string;
+  name: string;
+  department: string;
+  description: string;
+  pass_score: number;
+  is_mandatory: boolean;
+  sort_order: number;
+  is_active: boolean;
+  organization_id: string | null;
+};
+
+export type HROnboardingTemplate = {
+  id: string;
+  day_number: number;
+  task_name: string;
+  supervisor_role: string;
+  outcome: string;
+  sort_order: number;
+  is_active: boolean;
+  organization_id: string | null;
+};
+
 export type HRPosition = {
   id: string;
   code: string;
@@ -51,6 +107,8 @@ export type HREmployee = {
   pan_no: string;
   organization_id: string | null;
   user_id: string | null;
+  has_salary?: boolean;
+  salary?: HRSalary | null;
 };
 
 export type HRDepartment = {
@@ -58,6 +116,28 @@ export type HRDepartment = {
   name: string;
   code: string;
   status: string;
+};
+
+export type HROptions = {
+  employee_statuses: HROption[];
+  classifications: HROption[];
+  grades: HROption[];
+  leadership_tiers: HROption[];
+  vacancy_statuses: HROption[];
+  applicant_stages: HROption[];
+  scoring_statuses: HROption[];
+  attendance_statuses: HROption[];
+  shifts: HROption[];
+  leave_types: HROption[];
+  leave_approval_statuses: HROption[];
+  leave_approval_matrix: { max_days: number | null; role: string; label: string }[];
+  payroll_statuses: HROption[];
+  gurukul_statuses: HROption[];
+  departments: HRDepartment[];
+  positions: { id: string; code: string; designation: string; department: string; leadership_tier: string }[];
+  employees: { id: string; employee_code: string; full_name: string; status: string; position_id: string | null; department_id: string | null }[];
+  training_modules: HRTrainingModule[];
+  onboarding_templates: HROnboardingTemplate[];
 };
 
 export type HROnboardingTask = {
@@ -91,6 +171,7 @@ export type HRTraining = {
   module_name: string;
   watch_time: string | null;
   exam_score: number;
+  pass_score?: number;
   passed: boolean;
   completion_date: string | null;
 };
@@ -123,6 +204,7 @@ export type HRLeave = {
   approval_status: string;
   approved_by_id: string | null;
   approved_by_name: string | null;
+  required_approver_role?: string | null;
 };
 
 export type HRPayrollLine = {
@@ -161,6 +243,9 @@ export type HROverview = {
   pending_leave: number;
   onboarding_open: number;
   by_department: { name: string; value: number }[];
+  training_logs?: number;
+  payroll_drafts?: number;
+  by_status?: { name: string; value: number }[];
 };
 
 type ListOpts = {
@@ -186,6 +271,7 @@ async function list<T>(path: string, opts?: ListOpts): Promise<Paginated<T>> {
 
 export const hrApi = {
   overview: () => apiFetch<HROverview>("/hr/overview/"),
+  options: () => apiFetch<HROptions>("/hr/options/"),
 
   positions: (opts?: ListOpts) => list<HRPosition>("/hr/positions/", opts),
   createPosition: (payload: Partial<HRPosition> & { designation: string }) =>
@@ -202,6 +288,13 @@ export const hrApi = {
     apiFetch<HREmployee>(`/hr/employees/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }),
   exitEmployee: (id: string) =>
     apiFetch<HREmployee>(`/hr/employees/${id}/`, { method: "DELETE" }),
+  getSalary: (employeeId: string) =>
+    apiFetch<HRSalary>(`/hr/employees/${employeeId}/salary/`),
+  upsertSalary: (employeeId: string, payload: Record<string, unknown>) =>
+    apiFetch<HRSalary>(`/hr/employees/${employeeId}/salary/`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
 
   departments: () =>
     apiFetch<{ results: HRDepartment[] }>("/hr/departments/").then((r) => r.results),
@@ -224,6 +317,23 @@ export const hrApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  deleteOnboardingTask: (id: string) =>
+    apiFetch<void>(`/hr/onboarding-tasks/${id}/`, { method: "DELETE" }),
+
+  onboardingTemplates: (opts?: ListOpts) =>
+    list<HROnboardingTemplate>("/hr/onboarding-templates/", opts),
+  createOnboardingTemplate: (payload: Record<string, unknown>) =>
+    apiFetch<HROnboardingTemplate>("/hr/onboarding-templates/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateOnboardingTemplate: (id: string, payload: Record<string, unknown>) =>
+    apiFetch<HROnboardingTemplate>(`/hr/onboarding-templates/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteOnboardingTemplate: (id: string) =>
+    apiFetch<void>(`/hr/onboarding-templates/${id}/`, { method: "DELETE" }),
 
   training: (opts?: ListOpts) => list<HRTraining>("/hr/training/", opts),
   createTraining: (payload: Record<string, unknown>) =>
@@ -232,6 +342,20 @@ export const hrApi = {
     apiFetch<HRTraining>(`/hr/training/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteTraining: (id: string) =>
     apiFetch<void>(`/hr/training/${id}/`, { method: "DELETE" }),
+
+  trainingModules: (opts?: ListOpts) => list<HRTrainingModule>("/hr/training-modules/", opts),
+  createTrainingModule: (payload: Record<string, unknown>) =>
+    apiFetch<HRTrainingModule>("/hr/training-modules/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateTrainingModule: (id: string, payload: Record<string, unknown>) =>
+    apiFetch<HRTrainingModule>(`/hr/training-modules/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteTrainingModule: (id: string) =>
+    apiFetch<void>(`/hr/training-modules/${id}/`, { method: "DELETE" }),
 
   attendance: (opts?: ListOpts & { date?: string }) =>
     apiFetch<Paginated<HRAttendance> & { date: string; present_count: number }>(
@@ -250,12 +374,22 @@ export const hrApi = {
   leave: (opts?: ListOpts) => list<HRLeave>("/hr/leave/", opts),
   createLeave: (payload: Record<string, unknown>) =>
     apiFetch<HRLeave>("/hr/leave/", { method: "POST", body: JSON.stringify(payload) }),
+  updateLeave: (id: string, payload: Record<string, unknown>) =>
+    apiFetch<HRLeave>(`/hr/leave/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }),
   leaveAction: (id: string, action: "approve" | "reject", reason?: string) =>
     apiFetch<HRLeave>(`/hr/leave/${id}/`, {
       method: "POST",
       body: JSON.stringify({ action, reason }),
     }),
   deleteLeave: (id: string) => apiFetch<void>(`/hr/leave/${id}/`, { method: "DELETE" }),
+
+  scoring: (opts?: ListOpts) => list<HRScoring>("/hr/scoring/", opts),
+  createScoring: (payload: Record<string, unknown>) =>
+    apiFetch<HRScoring>("/hr/scoring/", { method: "POST", body: JSON.stringify(payload) }),
+  updateScoring: (id: string, payload: Record<string, unknown>) =>
+    apiFetch<HRScoring>(`/hr/scoring/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteScoring: (id: string) =>
+    apiFetch<void>(`/hr/scoring/${id}/`, { method: "DELETE" }),
 
   payroll: (opts?: ListOpts) => list<HRPayrollRun>("/hr/payroll/", opts),
   createPayroll: (period_month?: string) =>
@@ -285,6 +419,7 @@ export const hrApi = {
     position_id?: string;
     department?: string;
     publish?: boolean;
+    hiring_manager_id?: string;
   }) => companyApi.createVacancy(payload),
   vacancyAction: (id: string, action: "publish" | "close") => companyApi.vacancyAction(id, action),
   applications: (opts?: { mine?: boolean; vacancy_id?: string }) => companyApi.applications(opts),

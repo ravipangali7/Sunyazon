@@ -161,6 +161,7 @@ class OrganizationAdmin(BaseAdmin):
         ("Registration & Capital", {
             "fields": (
                 ("vat_pan_no", "total_capital"),
+                "managing_director_name",
                 "registration_certificate",
                 "share_allocation_document",
                 ("official_phone", "official_email"),

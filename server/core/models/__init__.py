@@ -132,15 +132,18 @@ from .hr import (
     Attendance,
     Employee,
     EmployeeOnboardingTask,
+    EmployeeSalary,
     JobApplicant,
     JobVacancy,
     LeaveRequest,
     OnboardingProcess,
+    OnboardingTaskTemplate,
     PayrollLine,
     PayrollRun,
     PositionMaster,
     SelectionScoring,
     TrainingLog,
+    TrainingModule,
 )
 from .procurement import (
     RFQ,

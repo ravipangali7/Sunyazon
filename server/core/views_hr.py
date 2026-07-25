@@ -19,17 +19,33 @@ from core.models import (
     Department,
     Employee,
     EmployeeOnboardingTask,
+    EmployeeSalary,
     LeaveRequest,
     OnboardingProcess,
+    OnboardingTaskTemplate,
     PayrollLine,
     PayrollRun,
     PositionMaster,
+    SelectionScoring,
     TrainingLog,
+    TrainingModule,
 )
 from core.services.common import DomainError
-from core.services.leave_service import approve_leave, exit_employee, reject_leave
+from core.services.hr_recruitment_service import evaluate_training, seed_onboarding_tasks
+from core.services.leave_service import (
+    LEAVE_APPROVAL_MATRIX,
+    approve_leave,
+    exit_employee,
+    leave_approval_role,
+    leave_days,
+    reject_leave,
+)
 from core.services.payroll_service import approve_payroll, pay_payroll, process_payroll
 from core.views_domain import DomainAuthMixin, _iso, org_filter, resolve_org, serialize_attendance, serialize_employee
+
+
+def _choices(enum_cls):
+    return [{"value": c.value, "label": c.label} for c in enum_cls]
 
 
 def _domain_error(exc: DomainError, http_status=400):
@@ -116,6 +132,7 @@ def serialize_position(p: PositionMaster) -> dict:
 
 def serialize_employee_full(e: Employee) -> dict:
     base = serialize_employee(e)
+    salary = getattr(e, "salary", None)
     base.update(
         {
             "citizenship_no": e.citizenship_no,
@@ -128,9 +145,75 @@ def serialize_employee_full(e: Employee) -> dict:
             "organization_id": str(e.organization_id) if e.organization_id else None,
             "user_id": str(e.user_id) if e.user_id else None,
             "raw_status": e.status,
+            "has_salary": salary is not None,
+            "salary": serialize_salary(salary) if salary else None,
         }
     )
     return base
+
+
+def serialize_salary(s: EmployeeSalary | None) -> dict | None:
+    if not s:
+        return None
+    return {
+        "id": str(s.id),
+        "employee_id": str(s.employee_id),
+        "basic": float(s.basic or 0),
+        "da": float(s.da or 0),
+        "grade_allowance": float(s.grade_allowance or 0),
+        "shift_allowance": float(s.shift_allowance or 0),
+        "meal_allowance": float(s.meal_allowance or 0),
+        "transport_allowance": float(s.transport_allowance or 0),
+        "other_allowances": float(s.other_allowances or 0),
+        "deductions": float(s.deductions or 0),
+        "ot_rate_per_hour": float(s.ot_rate_per_hour or 0),
+        "total_allowances": float(s.total_allowances or 0),
+        "currency_code": s.currency_code or "NPR",
+        "effective_from": _iso(s.effective_from),
+        "notes": s.notes or "",
+    }
+
+
+def serialize_scoring(s: SelectionScoring) -> dict:
+    return {
+        "id": str(s.id),
+        "applicant_id": str(s.applicant_id),
+        "applicant_name": s.applicant.full_name if s.applicant_id else "",
+        "vacancy_title": s.applicant.vacancy.title if s.applicant_id and s.applicant.vacancy_id else "",
+        "interviewer_id": str(s.interviewer_id) if s.interviewer_id else None,
+        "interviewer_name": s.interviewer.full_name if s.interviewer_id else "",
+        "score": s.score,
+        "remarks": s.remarks or "",
+        "status": s.status,
+    }
+
+
+def serialize_training_module(m: TrainingModule) -> dict:
+    return {
+        "id": str(m.id),
+        "code": m.code or "",
+        "name": m.name,
+        "department": m.department or "",
+        "description": m.description or "",
+        "pass_score": m.pass_score,
+        "is_mandatory": m.is_mandatory,
+        "sort_order": m.sort_order,
+        "is_active": m.is_active,
+        "organization_id": str(m.organization_id) if m.organization_id else None,
+    }
+
+
+def serialize_onboarding_template(t: OnboardingTaskTemplate) -> dict:
+    return {
+        "id": str(t.id),
+        "day_number": t.day_number,
+        "task_name": t.task_name,
+        "supervisor_role": t.supervisor_role or "",
+        "outcome": t.outcome or "",
+        "sort_order": t.sort_order,
+        "is_active": t.is_active,
+        "organization_id": str(t.organization_id) if t.organization_id else None,
+    }
 
 
 def serialize_attendance_full(a: Attendance) -> dict:
@@ -175,6 +258,17 @@ def serialize_onboarding_task(t: EmployeeOnboardingTask) -> dict:
 
 
 def serialize_training(t: TrainingLog) -> dict:
+    from django.db.models import Q
+
+    module = (
+        TrainingModule.objects.filter(name__iexact=t.module_name, is_active=True)
+        .filter(Q(organization=t.employee.organization_id) | Q(organization__isnull=True))
+        .order_by("organization_id")
+        .first()
+        if t.employee_id
+        else None
+    )
+    pass_score = module.pass_score if module else 80
     return {
         "id": str(t.id),
         "employee_id": str(t.employee_id),
@@ -183,13 +277,14 @@ def serialize_training(t: TrainingLog) -> dict:
         "module_name": t.module_name,
         "watch_time": str(t.watch_time) if t.watch_time else None,
         "exam_score": t.exam_score,
-        "passed": (t.exam_score or 0) >= 80,
+        "pass_score": pass_score,
+        "passed": (t.exam_score or 0) >= pass_score,
         "completion_date": _iso(t.completion_date),
     }
 
 
 def serialize_leave(lr: LeaveRequest) -> dict:
-    days = (lr.to_date - lr.from_date).days + 1 if lr.from_date and lr.to_date else 0
+    days = leave_days(lr.from_date, lr.to_date) if lr.from_date and lr.to_date else 0
     return {
         "id": str(lr.id),
         "employee_id": str(lr.employee_id),
@@ -203,6 +298,7 @@ def serialize_leave(lr: LeaveRequest) -> dict:
         "approval_status": str(lr.approval_status),
         "approved_by_id": str(lr.approved_by_id) if lr.approved_by_id else None,
         "approved_by_name": lr.approved_by.full_name if lr.approved_by_id else None,
+        "required_approver_role": leave_approval_role(days) if days else None,
     }
 
 
@@ -339,7 +435,9 @@ class HREmployeesView(DomainAuthMixin, APIView):
     def get(self, request):
         org = resolve_org(request.user)
         qs = org_filter(
-            Employee.objects.select_related("department", "position", "user", "reporting_to", "organization"),
+            Employee.objects.select_related(
+                "department", "position", "user", "reporting_to", "organization", "salary"
+            ),
             org,
         )
         search = (request.query_params.get("search") or request.query_params.get("q") or "").strip()
@@ -415,15 +513,42 @@ class HREmployeesView(DomainAuthMixin, APIView):
                     probation_period_months=3,
                     gurukul_status="pending",
                 )
+                seed_onboarding_tasks(emp)
+        # Optional salary on create
+        if any(k in data for k in ("basic", "salary", "ot_rate_per_hour")):
+            sal = data.get("salary") if isinstance(data.get("salary"), dict) else data
+            EmployeeSalary.objects.update_or_create(
+                employee=emp,
+                defaults={
+                    "basic": _decimal(sal.get("basic")),
+                    "da": _decimal(sal.get("da")),
+                    "grade_allowance": _decimal(sal.get("grade_allowance")),
+                    "shift_allowance": _decimal(sal.get("shift_allowance")),
+                    "meal_allowance": _decimal(sal.get("meal_allowance")),
+                    "transport_allowance": _decimal(sal.get("transport_allowance")),
+                    "other_allowances": _decimal(sal.get("other_allowances")),
+                    "deductions": _decimal(sal.get("deductions")),
+                    "ot_rate_per_hour": _decimal(sal.get("ot_rate_per_hour")),
+                    "currency_code": (sal.get("currency_code") or "NPR")[:8],
+                    "effective_from": _parse_date(sal.get("effective_from")) or emp.join_date,
+                    "notes": sal.get("notes") or "",
+                },
+            )
+        emp = Employee.objects.select_related(
+            "department", "position", "user", "reporting_to", "organization", "salary"
+        ).get(pk=emp.pk)
         return Response(serialize_employee_full(emp), status=201)
 
 
 class HREmployeeDetailView(DomainAuthMixin, APIView):
     def get(self, request, employee_id):
         org = resolve_org(request.user)
-        emp = org_filter(Employee.objects.select_related("department", "position", "user", "reporting_to"), org).filter(
-            pk=employee_id
-        ).first()
+        emp = org_filter(
+            Employee.objects.select_related(
+                "department", "position", "user", "reporting_to", "salary"
+            ),
+            org,
+        ).filter(pk=employee_id).first()
         if not emp:
             return Response({"detail": "Not found."}, status=404)
         return Response(serialize_employee_full(emp))
@@ -522,10 +647,13 @@ class HROnboardingView(DomainAuthMixin, APIView):
             probation_period_months=int(request.data.get("probation_period_months") or 3),
             gurukul_status=request.data.get("gurukul_status") or "pending",
         )
-        # Optional seed tasks
-        for name in request.data.get("tasks") or []:
-            if isinstance(name, str) and name.strip():
-                EmployeeOnboardingTask.objects.create(employee=emp, task_name=name.strip())
+        custom_tasks = request.data.get("tasks") or []
+        if custom_tasks:
+            for name in custom_tasks:
+                if isinstance(name, str) and name.strip():
+                    EmployeeOnboardingTask.objects.create(employee=emp, task_name=name.strip())
+        else:
+            seed_onboarding_tasks(emp)
         return Response(serialize_onboarding(process), status=201)
 
 
@@ -622,14 +750,39 @@ class HRTrainingView(DomainAuthMixin, APIView):
         if not emp:
             return Response({"detail": "Employee not found."}, status=404)
         module_name = (request.data.get("module_name") or "").strip()
+        if not module_name and request.data.get("module_id"):
+            mod = TrainingModule.objects.filter(pk=request.data["module_id"]).first()
+            if mod:
+                module_name = mod.name
         if not module_name:
-            return Response({"detail": "module_name is required."}, status=400)
+            return Response({"detail": "module_name or module_id is required."}, status=400)
+        watch = None
+        if request.data.get("watch_time"):
+            try:
+                from datetime import timedelta
+
+                # Accept minutes as number or HH:MM:SS
+                raw = request.data.get("watch_time")
+                if isinstance(raw, (int, float)) or str(raw).isdigit():
+                    watch = timedelta(minutes=float(raw))
+                else:
+                    parts = str(raw).split(":")
+                    if len(parts) == 3:
+                        watch = timedelta(
+                            hours=int(parts[0]), minutes=int(parts[1]), seconds=int(parts[2])
+                        )
+                    elif len(parts) == 2:
+                        watch = timedelta(hours=int(parts[0]), minutes=int(parts[1]))
+            except (ValueError, TypeError):
+                watch = None
         log = TrainingLog.objects.create(
             employee=emp,
             module_name=module_name,
             exam_score=int(request.data.get("exam_score") or 0),
+            watch_time=watch,
             completion_date=_parse_date(request.data.get("completion_date")) or timezone.localdate(),
         )
+        evaluate_training(log, actor=request.user)
         return Response(serialize_training(log), status=201)
 
 
@@ -646,7 +799,25 @@ class HRTrainingDetailView(DomainAuthMixin, APIView):
             log.exam_score = int(data.get("exam_score") or 0)
         if "completion_date" in data:
             log.completion_date = _parse_date(data.get("completion_date"))
+        if "watch_time" in data and data.get("watch_time") is not None:
+            from datetime import timedelta
+
+            raw = data.get("watch_time")
+            try:
+                if isinstance(raw, (int, float)) or str(raw).isdigit():
+                    log.watch_time = timedelta(minutes=float(raw))
+                else:
+                    parts = str(raw).split(":")
+                    if len(parts) >= 2:
+                        log.watch_time = timedelta(
+                            hours=int(parts[0]),
+                            minutes=int(parts[1]),
+                            seconds=int(parts[2]) if len(parts) > 2 else 0,
+                        )
+            except (ValueError, TypeError):
+                pass
         log.save()
+        evaluate_training(log, actor=request.user)
         return Response(serialize_training(log))
 
     def delete(self, request, training_id):
@@ -1005,9 +1176,399 @@ class HROverviewView(DomainAuthMixin, APIView):
                 "applications": applications,
                 "pending_leave": pending_leave,
                 "onboarding_open": onboarding_open,
+                "training_logs": TrainingLog.objects.filter(employee__organization=org).count(),
+                "payroll_drafts": PayrollRun.objects.filter(
+                    organization=org, status=PayrollRun.Status.DRAFT
+                ).count(),
                 "by_department": [
                     {"name": row["department__name"] or "Unassigned", "value": row["value"]}
                     for row in by_dept
                 ],
+                "by_status": [
+                    {"name": row["status"], "value": row["value"]}
+                    for row in employees.values("status").annotate(value=Count("id")).order_by("-value")
+                ],
             }
         )
+
+
+# ── Options (dynamic enums + lookups) ────────────────────────────────────────
+
+
+class HROptionsView(DomainAuthMixin, APIView):
+    """All dropdowns / enums / lookups for the HR UI — nothing hardcoded on the client."""
+
+    def get(self, request):
+        org = resolve_org(request.user)
+        from django.db.models import Q
+        from core.models import JobApplicant, JobVacancy
+
+        departments = []
+        positions = []
+        employees = []
+        training_modules = []
+        onboarding_templates = []
+        if org:
+            departments = [
+                serialize_department(d)
+                for d in Department.objects.filter(organization=org).order_by("name")[:200]
+            ]
+            positions = [
+                {
+                    "id": str(p.id),
+                    "code": p.code or "",
+                    "designation": p.designation,
+                    "department": p.department or "",
+                    "leadership_tier": p.leadership_tier,
+                }
+                for p in PositionMaster.objects.order_by("sort_order", "designation")[:300]
+            ]
+            employees = [
+                {
+                    "id": str(e.id),
+                    "employee_code": e.employee_code,
+                    "full_name": e.full_name,
+                    "status": e.status,
+                    "position_id": str(e.position_id) if e.position_id else None,
+                    "department_id": str(e.department_id) if e.department_id else None,
+                }
+                for e in Employee.objects.filter(organization=org)
+                .exclude(status=Employee.Status.EXITED)
+                .order_by("employee_code")[:500]
+            ]
+            training_modules = [
+                serialize_training_module(m)
+                for m in TrainingModule.objects.filter(is_active=True)
+                .filter(Q(organization=org) | Q(organization__isnull=True))
+                .order_by("sort_order", "name")[:200]
+            ]
+            onboarding_templates = [
+                serialize_onboarding_template(t)
+                for t in OnboardingTaskTemplate.objects.filter(is_active=True)
+                .filter(Q(organization=org) | Q(organization__isnull=True))
+                .order_by("sort_order", "day_number")[:100]
+            ]
+
+        return Response(
+            {
+                "employee_statuses": _choices(Employee.Status),
+                "classifications": _choices(Employee.Classification),
+                "grades": _choices(Employee.Grade),
+                "leadership_tiers": _choices(PositionMaster.LeadershipTier),
+                "vacancy_statuses": _choices(JobVacancy.Status),
+                "applicant_stages": _choices(JobApplicant.Stage),
+                "scoring_statuses": _choices(SelectionScoring.Status),
+                "attendance_statuses": _choices(Attendance.Status),
+                "shifts": _choices(Attendance.Shift),
+                "leave_types": _choices(LeaveRequest.LeaveType),
+                "leave_approval_statuses": _choices(LeaveRequest.ApprovalStatus),
+                "leave_approval_matrix": LEAVE_APPROVAL_MATRIX,
+                "payroll_statuses": _choices(PayrollRun.Status),
+                "gurukul_statuses": [
+                    {"value": "pending", "label": "Pending"},
+                    {"value": "in_progress", "label": "In progress"},
+                    {"value": "completed", "label": "Completed"},
+                ],
+                "departments": departments,
+                "positions": positions,
+                "employees": employees,
+                "training_modules": training_modules,
+                "onboarding_templates": onboarding_templates,
+            }
+        )
+
+
+# ── Employee salary ──────────────────────────────────────────────────────────
+
+
+class HREmployeeSalaryView(DomainAuthMixin, APIView):
+    def get(self, request, employee_id):
+        org = resolve_org(request.user)
+        emp = org_filter(Employee.objects.select_related("salary"), org).filter(pk=employee_id).first()
+        if not emp:
+            return Response({"detail": "Not found."}, status=404)
+        return Response(serialize_salary(getattr(emp, "salary", None)) or {})
+
+    def put(self, request, employee_id):
+        return self._upsert(request, employee_id)
+
+    def post(self, request, employee_id):
+        return self._upsert(request, employee_id)
+
+    def patch(self, request, employee_id):
+        return self._upsert(request, employee_id)
+
+    def _upsert(self, request, employee_id):
+        org = resolve_org(request.user)
+        emp = org_filter(Employee.objects.all(), org).filter(pk=employee_id).first()
+        if not emp:
+            return Response({"detail": "Not found."}, status=404)
+        data = request.data
+        sal, _ = EmployeeSalary.objects.update_or_create(
+            employee=emp,
+            defaults={
+                "basic": _decimal(data.get("basic")),
+                "da": _decimal(data.get("da")),
+                "grade_allowance": _decimal(data.get("grade_allowance")),
+                "shift_allowance": _decimal(data.get("shift_allowance")),
+                "meal_allowance": _decimal(data.get("meal_allowance")),
+                "transport_allowance": _decimal(data.get("transport_allowance")),
+                "other_allowances": _decimal(data.get("other_allowances")),
+                "deductions": _decimal(data.get("deductions")),
+                "ot_rate_per_hour": _decimal(data.get("ot_rate_per_hour")),
+                "currency_code": (data.get("currency_code") or "NPR")[:8],
+                "effective_from": _parse_date(data.get("effective_from")),
+                "notes": data.get("notes") or "",
+            },
+        )
+        return Response(serialize_salary(sal))
+
+
+# ── Selection scoring ────────────────────────────────────────────────────────
+
+
+class HRScoringView(DomainAuthMixin, APIView):
+    def get(self, request):
+        org = resolve_org(request.user)
+        qs = SelectionScoring.objects.select_related(
+            "applicant", "applicant__vacancy", "interviewer"
+        ).filter(applicant__vacancy__organization=org)
+        applicant_id = request.query_params.get("applicant_id")
+        if applicant_id:
+            qs = qs.filter(applicant_id=applicant_id)
+        vacancy_id = request.query_params.get("vacancy_id")
+        if vacancy_id:
+            qs = qs.filter(applicant__vacancy_id=vacancy_id)
+        qs = qs.order_by("-score")
+        items, meta = _paginate(qs, request)
+        return Response({"results": [serialize_scoring(s) for s in items], **meta})
+
+    def post(self, request):
+        org = resolve_org(request.user)
+        from core.models import JobApplicant
+
+        applicant = JobApplicant.objects.filter(
+            pk=request.data.get("applicant_id"), vacancy__organization=org
+        ).first()
+        if not applicant:
+            return Response({"detail": "Applicant not found."}, status=404)
+        interviewer = None
+        if request.data.get("interviewer_id"):
+            interviewer = Employee.objects.filter(
+                pk=request.data["interviewer_id"], organization=org
+            ).first()
+        if not interviewer:
+            interviewer = Employee.objects.filter(user=request.user, organization=org).first()
+        if not interviewer:
+            return Response({"detail": "interviewer_id is required."}, status=400)
+        score = int(request.data.get("score") or 0)
+        if score < 1 or score > 100:
+            return Response({"detail": "score must be 1–100."}, status=400)
+        status_val = request.data.get("status") or SelectionScoring.Status.WAITLIST
+        if status_val not in {c.value for c in SelectionScoring.Status}:
+            return Response({"detail": "Invalid scoring status."}, status=400)
+        scoring = SelectionScoring.objects.create(
+            applicant=applicant,
+            interviewer=interviewer,
+            score=score,
+            remarks=request.data.get("remarks") or "",
+            status=status_val,
+        )
+        # Advance applicant to interviewed if still applied/shortlisted
+        if applicant.current_stage in (
+            JobApplicant.Stage.APPLIED,
+            JobApplicant.Stage.SHORTLISTED,
+        ):
+            applicant.current_stage = JobApplicant.Stage.INTERVIEWED
+            applicant.save(update_fields=["current_stage"])
+        return Response(serialize_scoring(scoring), status=201)
+
+
+class HRScoringDetailView(DomainAuthMixin, APIView):
+    def patch(self, request, scoring_id):
+        org = resolve_org(request.user)
+        scoring = SelectionScoring.objects.select_related("applicant", "interviewer").filter(
+            pk=scoring_id, applicant__vacancy__organization=org
+        ).first()
+        if not scoring:
+            return Response({"detail": "Not found."}, status=404)
+        data = request.data
+        if "score" in data:
+            score = int(data.get("score") or 0)
+            if score < 1 or score > 100:
+                return Response({"detail": "score must be 1–100."}, status=400)
+            scoring.score = score
+        if "remarks" in data:
+            scoring.remarks = data.get("remarks") or ""
+        if "status" in data and data["status"] in {c.value for c in SelectionScoring.Status}:
+            scoring.status = data["status"]
+        if "interviewer_id" in data and data["interviewer_id"]:
+            interviewer = Employee.objects.filter(
+                pk=data["interviewer_id"], organization=org
+            ).first()
+            if interviewer:
+                scoring.interviewer = interviewer
+        scoring.save()
+        return Response(serialize_scoring(scoring))
+
+    def delete(self, request, scoring_id):
+        org = resolve_org(request.user)
+        scoring = SelectionScoring.objects.filter(
+            pk=scoring_id, applicant__vacancy__organization=org
+        ).first()
+        if not scoring:
+            return Response({"detail": "Not found."}, status=404)
+        scoring.delete()
+        return Response(status=204)
+
+
+# ── Training modules catalog ─────────────────────────────────────────────────
+
+
+class HRTrainingModulesView(DomainAuthMixin, APIView):
+    def get(self, request):
+        org = resolve_org(request.user)
+        from django.db.models import Q
+
+        qs = TrainingModule.objects.all()
+        if org:
+            qs = qs.filter(Q(organization=org) | Q(organization__isnull=True))
+        if request.query_params.get("active", "1") in ("1", "true"):
+            qs = qs.filter(is_active=True)
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search) | Q(department__icontains=search))
+        qs = qs.order_by("sort_order", "name")
+        items, meta = _paginate(qs, request)
+        return Response({"results": [serialize_training_module(m) for m in items], **meta})
+
+    def post(self, request):
+        org = resolve_org(request.user)
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            return Response({"detail": "name is required."}, status=400)
+        mod = TrainingModule.objects.create(
+            organization=org,
+            code=(request.data.get("code") or "").strip(),
+            name=name,
+            department=(request.data.get("department") or "").strip(),
+            description=request.data.get("description") or "",
+            pass_score=int(request.data.get("pass_score") or 80),
+            is_mandatory=bool(request.data.get("is_mandatory")),
+            sort_order=int(request.data.get("sort_order") or 100),
+            is_active=bool(request.data.get("is_active", True)),
+        )
+        return Response(serialize_training_module(mod), status=201)
+
+
+class HRTrainingModuleDetailView(DomainAuthMixin, APIView):
+    def patch(self, request, module_id):
+        org = resolve_org(request.user)
+        mod = TrainingModule.objects.filter(pk=module_id).first()
+        if not mod:
+            return Response({"detail": "Not found."}, status=404)
+        if mod.organization_id and org and mod.organization_id != org.id:
+            return Response({"detail": "Not found."}, status=404)
+        data = request.data
+        for field in ("code", "name", "department", "description"):
+            if field in data and data[field] is not None:
+                setattr(mod, field, data[field])
+        if "pass_score" in data:
+            mod.pass_score = int(data.get("pass_score") or 80)
+        if "is_mandatory" in data:
+            mod.is_mandatory = bool(data.get("is_mandatory"))
+        if "sort_order" in data:
+            mod.sort_order = int(data.get("sort_order") or 100)
+        if "is_active" in data:
+            mod.is_active = bool(data.get("is_active"))
+        mod.save()
+        return Response(serialize_training_module(mod))
+
+    def delete(self, request, module_id):
+        org = resolve_org(request.user)
+        mod = TrainingModule.objects.filter(pk=module_id).first()
+        if not mod:
+            return Response({"detail": "Not found."}, status=404)
+        if mod.organization_id and org and mod.organization_id != org.id:
+            return Response({"detail": "Not found."}, status=404)
+        if not mod.organization_id:
+            # Soft-deactivate global catalog entries
+            mod.is_active = False
+            mod.save(update_fields=["is_active"])
+            return Response(serialize_training_module(mod))
+        mod.delete()
+        return Response(status=204)
+
+
+# ── Onboarding task templates ────────────────────────────────────────────────
+
+
+class HROnboardingTemplatesView(DomainAuthMixin, APIView):
+    def get(self, request):
+        org = resolve_org(request.user)
+        from django.db.models import Q
+
+        qs = OnboardingTaskTemplate.objects.all()
+        if org:
+            qs = qs.filter(Q(organization=org) | Q(organization__isnull=True))
+        if request.query_params.get("active", "1") in ("1", "true"):
+            qs = qs.filter(is_active=True)
+        qs = qs.order_by("sort_order", "day_number")
+        items, meta = _paginate(qs, request)
+        return Response({"results": [serialize_onboarding_template(t) for t in items], **meta})
+
+    def post(self, request):
+        org = resolve_org(request.user)
+        name = (request.data.get("task_name") or "").strip()
+        if not name:
+            return Response({"detail": "task_name is required."}, status=400)
+        tmpl = OnboardingTaskTemplate.objects.create(
+            organization=org,
+            day_number=int(request.data.get("day_number") or 1),
+            task_name=name,
+            supervisor_role=request.data.get("supervisor_role") or "",
+            outcome=request.data.get("outcome") or "",
+            sort_order=int(request.data.get("sort_order") or 100),
+            is_active=bool(request.data.get("is_active", True)),
+        )
+        return Response(serialize_onboarding_template(tmpl), status=201)
+
+
+class HROnboardingTemplateDetailView(DomainAuthMixin, APIView):
+    def patch(self, request, template_id):
+        org = resolve_org(request.user)
+        tmpl = OnboardingTaskTemplate.objects.filter(pk=template_id).first()
+        if not tmpl:
+            return Response({"detail": "Not found."}, status=404)
+        if tmpl.organization_id and org and tmpl.organization_id != org.id:
+            return Response({"detail": "Not found."}, status=404)
+        data = request.data
+        if "task_name" in data and data["task_name"]:
+            tmpl.task_name = data["task_name"].strip()
+        if "day_number" in data:
+            tmpl.day_number = int(data.get("day_number") or 1)
+        if "supervisor_role" in data:
+            tmpl.supervisor_role = data.get("supervisor_role") or ""
+        if "outcome" in data:
+            tmpl.outcome = data.get("outcome") or ""
+        if "sort_order" in data:
+            tmpl.sort_order = int(data.get("sort_order") or 100)
+        if "is_active" in data:
+            tmpl.is_active = bool(data.get("is_active"))
+        tmpl.save()
+        return Response(serialize_onboarding_template(tmpl))
+
+    def delete(self, request, template_id):
+        org = resolve_org(request.user)
+        tmpl = OnboardingTaskTemplate.objects.filter(pk=template_id).first()
+        if not tmpl:
+            return Response({"detail": "Not found."}, status=404)
+        if tmpl.organization_id and org and tmpl.organization_id != org.id:
+            return Response({"detail": "Not found."}, status=404)
+        if not tmpl.organization_id:
+            tmpl.is_active = False
+            tmpl.save(update_fields=["is_active"])
+            return Response(serialize_onboarding_template(tmpl))
+        tmpl.delete()
+        return Response(status=204)
+

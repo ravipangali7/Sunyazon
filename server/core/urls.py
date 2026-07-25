@@ -45,19 +45,27 @@ from core.views_hr import (
     HRAttendanceView,
     HRDepartmentsView,
     HREmployeeDetailView,
+    HREmployeeSalaryView,
     HREmployeesView,
     HRLeaveDetailView,
     HRLeaveView,
     HROnboardingDetailView,
     HROnboardingTaskDetailView,
     HROnboardingTasksView,
+    HROnboardingTemplateDetailView,
+    HROnboardingTemplatesView,
     HROnboardingView,
+    HROptionsView,
     HROverviewView,
     HRPayrollDetailView,
     HRPayrollView,
     HRPositionDetailView,
     HRPositionsView,
+    HRScoringDetailView,
+    HRScoringView,
     HRTrainingDetailView,
+    HRTrainingModuleDetailView,
+    HRTrainingModulesView,
     HRTrainingView,
 )
 from core.views_maintenance import (
@@ -355,6 +363,7 @@ urlpatterns = [
     ),
     # HR module (model-backed CRUD)
     path("hr/overview/", HROverviewView.as_view(), name="hr-overview"),
+    path("hr/options/", HROptionsView.as_view(), name="hr-options"),
     path("hr/positions/", HRPositionsView.as_view(), name="hr-positions"),
     path(
         "hr/positions/<uuid:position_id>/",
@@ -366,6 +375,11 @@ urlpatterns = [
         "hr/employees/<uuid:employee_id>/",
         HREmployeeDetailView.as_view(),
         name="hr-employee-detail",
+    ),
+    path(
+        "hr/employees/<uuid:employee_id>/salary/",
+        HREmployeeSalaryView.as_view(),
+        name="hr-employee-salary",
     ),
     path("hr/departments/", HRDepartmentsView.as_view(), name="hr-departments"),
     path("hr/onboarding/", HROnboardingView.as_view(), name="hr-onboarding"),
@@ -380,11 +394,27 @@ urlpatterns = [
         HROnboardingTaskDetailView.as_view(),
         name="hr-onboarding-task-detail",
     ),
+    path(
+        "hr/onboarding-templates/",
+        HROnboardingTemplatesView.as_view(),
+        name="hr-onboarding-templates",
+    ),
+    path(
+        "hr/onboarding-templates/<uuid:template_id>/",
+        HROnboardingTemplateDetailView.as_view(),
+        name="hr-onboarding-template-detail",
+    ),
     path("hr/training/", HRTrainingView.as_view(), name="hr-training"),
     path(
         "hr/training/<uuid:training_id>/",
         HRTrainingDetailView.as_view(),
         name="hr-training-detail",
+    ),
+    path("hr/training-modules/", HRTrainingModulesView.as_view(), name="hr-training-modules"),
+    path(
+        "hr/training-modules/<uuid:module_id>/",
+        HRTrainingModuleDetailView.as_view(),
+        name="hr-training-module-detail",
     ),
     path("hr/attendance/", HRAttendanceView.as_view(), name="hr-attendance"),
     path(
@@ -403,6 +433,12 @@ urlpatterns = [
         "hr/payroll/<uuid:payroll_id>/",
         HRPayrollDetailView.as_view(),
         name="hr-payroll-detail",
+    ),
+    path("hr/scoring/", HRScoringView.as_view(), name="hr-scoring"),
+    path(
+        "hr/scoring/<uuid:scoring_id>/",
+        HRScoringDetailView.as_view(),
+        name="hr-scoring-detail",
     ),
     # HR recruitment
     path("hr/vacancies/", JobVacanciesView.as_view(), name="hr-vacancies"),

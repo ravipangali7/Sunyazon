@@ -122,6 +122,34 @@ def review_applicant(applicant, *, stage: str, review_notes: str = "", reviewer=
     return applicant
 
 
+def seed_onboarding_tasks(employee):
+    """Create onboarding tasks from DB templates (org then global)."""
+    from core.models import EmployeeOnboardingTask, OnboardingTaskTemplate
+    from datetime import timedelta
+
+    templates = list(
+        OnboardingTaskTemplate.objects.filter(
+            is_active=True, organization=employee.organization
+        ).order_by("sort_order", "day_number")
+    )
+    if not templates:
+        templates = list(
+            OnboardingTaskTemplate.objects.filter(
+                is_active=True, organization__isnull=True
+            ).order_by("sort_order", "day_number")
+        )
+    base = employee.join_date or today()
+    for tmpl in templates:
+        EmployeeOnboardingTask.objects.get_or_create(
+            employee=employee,
+            task_name=tmpl.task_name,
+            defaults={
+                "due_date": base + timedelta(days=max(0, (tmpl.day_number or 1) - 1)),
+                "manager_remark": tmpl.outcome or "",
+            },
+        )
+
+
 @transaction.atomic
 def hire_applicant(applicant, *, scoring=None, user=None, actor=None):
     """
@@ -130,7 +158,6 @@ def hire_applicant(applicant, *, scoring=None, user=None, actor=None):
     """
     from core.models import (
         Employee,
-        EmployeeOnboardingTask,
         JobApplicant,
         JobVacancy,
         OnboardingProcess,
@@ -159,17 +186,10 @@ def hire_applicant(applicant, *, scoring=None, user=None, actor=None):
         join_date=today(),
         status=Employee.Status.ACTIVE,
     )
-    OnboardingProcess.objects.create(employee=emp, joined_date=today())
-    for task_name in [
-        "Digital setup",
-        "Dept introduction",
-        "SOP reading",
-        "App training",
-        "Gurukul courses",
-        "Factory visit",
-        "Week review",
-    ]:
-        EmployeeOnboardingTask.objects.create(employee=emp, task_name=task_name)
+    OnboardingProcess.objects.create(
+        employee=emp, joined_date=today(), gurukul_status="pending"
+    )
+    seed_onboarding_tasks(emp)
 
     vacancy.status = JobVacancy.Status.FULFILLED
     vacancy.save(update_fields=["status"])
@@ -196,13 +216,50 @@ def hire_applicant(applicant, *, scoring=None, user=None, actor=None):
 
 
 @transaction.atomic
-def evaluate_training(training_log, *, actor=None, pass_score: int = 80):
-    """exam_score < 80 → flag incomplete / block role stage."""
-    incomplete = training_log.exam_score is not None and training_log.exam_score < pass_score
+def evaluate_training(training_log, *, actor=None, pass_score: int | None = None):
+    """Evaluate exam; update onboarding gurukul_status when mandatory modules complete."""
+    from django.db.models import Q
+
+    from core.models import OnboardingProcess, TrainingLog, TrainingModule
+
+    module = (
+        TrainingModule.objects.filter(name__iexact=training_log.module_name, is_active=True)
+        .order_by("organization_id")
+        .first()
+    )
+    threshold = pass_score if pass_score is not None else (module.pass_score if module else 80)
+
+    passed = training_log.exam_score is not None and training_log.exam_score >= threshold
     write_audit(
         actor=actor,
         entity=training_log,
         action="training.evaluated",
-        after={"incomplete": incomplete, "score": training_log.exam_score},
+        after={"passed": passed, "score": training_log.exam_score, "pass_score": threshold},
     )
-    return not incomplete
+
+    emp = training_log.employee
+    process = OnboardingProcess.objects.filter(employee=emp).first()
+    if process and passed:
+        org = emp.organization
+        mandatory = TrainingModule.objects.filter(is_active=True, is_mandatory=True).filter(
+            Q(organization=org) | Q(organization__isnull=True)
+        )
+        all_passed = True
+        for m in mandatory:
+            latest = (
+                TrainingLog.objects.filter(employee=emp, module_name__iexact=m.name)
+                .order_by("-completion_date", "-id")
+                .first()
+            )
+            if not latest or (latest.exam_score or 0) < m.pass_score:
+                all_passed = False
+                break
+        if all_passed and mandatory.exists():
+            process.gurukul_status = "completed"
+            process.save(update_fields=["gurukul_status"])
+        elif process.gurukul_status in ("", "pending"):
+            process.gurukul_status = "in_progress"
+            process.save(update_fields=["gurukul_status"])
+
+    return passed
+

@@ -64,8 +64,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_HEADING("6/7  seed_enterprise"))
         call_command("seed_enterprise")
 
-        self.stdout.write(self.style.MIGRATE_HEADING("7/7  seed_menus"))
+        self.stdout.write(self.style.MIGRATE_HEADING("7/8  seed_menus"))
         call_command("seed_menus")
+
+        self.stdout.write(self.style.MIGRATE_HEADING("8/8  seed_hr"))
+        call_command("seed_hr")
 
         self.stdout.write(self.style.SUCCESS(
             "\nAll seeders finished.\n"

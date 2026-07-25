@@ -458,3 +458,95 @@ class PayrollLine(UUIDPrimaryKeyModel):
 
     def __str__(self):
         return f"{self.employee} — {self.net_pay}"
+
+
+class EmployeeSalary(UUIDPrimaryKeyModel):
+    """Compensation master per employee — drives payroll processing."""
+
+    employee = models.OneToOneField(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="salary",
+    )
+    basic = CurrencyField()
+    da = CurrencyField(help_text="Dearness allowance")
+    grade_allowance = CurrencyField()
+    shift_allowance = CurrencyField()
+    meal_allowance = CurrencyField()
+    transport_allowance = CurrencyField()
+    other_allowances = CurrencyField()
+    deductions = CurrencyField(help_text="Fixed monthly deductions (SSF, CIT, etc.)")
+    ot_rate_per_hour = CurrencyField(help_text="Overtime rate used in payroll")
+    currency_code = models.CharField(max_length=8, default="NPR")
+    effective_from = models.DateField(null=True, blank=True)
+    notes = models.CharField(max_length=512, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "employee salaries"
+
+    def __str__(self):
+        return f"Salary {self.employee} — basic {self.basic}"
+
+    @property
+    def total_allowances(self):
+        return (
+            (self.da or 0)
+            + (self.grade_allowance or 0)
+            + (self.shift_allowance or 0)
+            + (self.meal_allowance or 0)
+            + (self.transport_allowance or 0)
+            + (self.other_allowances or 0)
+        )
+
+
+class OnboardingTaskTemplate(UUIDPrimaryKeyModel):
+    """Org-scoped first-week / induction task templates (DB-driven, not hardcoded)."""
+
+    organization = models.ForeignKey(
+        "core.Organization",
+        on_delete=models.CASCADE,
+        related_name="onboarding_task_templates",
+        null=True,
+        blank=True,
+        help_text="Null = global default template shared across orgs.",
+    )
+    day_number = models.PositiveSmallIntegerField(default=1)
+    task_name = models.CharField(max_length=255)
+    supervisor_role = models.CharField(max_length=128, blank=True)
+    outcome = models.CharField(max_length=255, blank=True)
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "day_number", "task_name"]
+
+    def __str__(self):
+        return f"Day {self.day_number}: {self.task_name}"
+
+
+class TrainingModule(UUIDPrimaryKeyModel):
+    """Gurukul / training catalog — modules employees can complete."""
+
+    organization = models.ForeignKey(
+        "core.Organization",
+        on_delete=models.CASCADE,
+        related_name="training_modules",
+        null=True,
+        blank=True,
+        help_text="Null = global catalog entry.",
+    )
+    code = models.CharField(max_length=64, blank=True, db_index=True)
+    name = models.CharField(max_length=255)
+    department = models.CharField(max_length=128, blank=True)
+    description = models.TextField(blank=True)
+    pass_score = models.PositiveSmallIntegerField(default=80)
+    is_mandatory = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name

@@ -9,15 +9,18 @@ from core.models import (
     Attendance,
     Employee,
     EmployeeOnboardingTask,
+    EmployeeSalary,
     JobApplicant,
     JobVacancy,
     LeaveRequest,
     OnboardingProcess,
+    OnboardingTaskTemplate,
     PayrollLine,
     PayrollRun,
     PositionMaster,
     SelectionScoring,
     TrainingLog,
+    TrainingModule,
 )
 
 from .base import BaseAdmin, badge, bool_badge, choice_badge, image_thumb, money
@@ -294,3 +297,52 @@ class TrainingLogAdmin(BaseAdmin):
     def score_col(self, obj):
         passed = obj.exam_score >= 80
         return badge(f"{obj.exam_score}/100", "#198754" if passed else "#dc3545")
+
+
+class EmployeeSalaryInline(admin.StackedInline):
+    model = EmployeeSalary
+    extra = 0
+    fields = (
+        ("basic", "da", "grade_allowance"),
+        ("shift_allowance", "meal_allowance", "transport_allowance"),
+        ("other_allowances", "deductions", "ot_rate_per_hour"),
+        ("currency_code", "effective_from"),
+        "notes",
+    )
+
+
+# Re-bind Employee admin inlines to include salary
+EmployeeAdmin.inlines = [EmployeeSalaryInline, OnboardingProcessInline, OnboardingTaskInline, TrainingLogInline]
+
+
+@admin.register(EmployeeSalary)
+class EmployeeSalaryAdmin(BaseAdmin):
+    list_display = ("employee", "basic", "ot_rate_per_hour", "currency_code", "effective_from")
+    search_fields = ("employee__full_name", "employee__employee_code")
+    autocomplete_fields = ["employee"]
+    list_select_related = ("employee",)
+
+
+@admin.register(OnboardingTaskTemplate)
+class OnboardingTaskTemplateAdmin(BaseAdmin):
+    list_display = ("day_number", "task_name", "supervisor_role", "organization", "sort_order", "is_active")
+    list_filter = ("is_active", "organization")
+    search_fields = ("task_name", "supervisor_role", "outcome")
+    autocomplete_fields = ["organization"]
+
+
+@admin.register(TrainingModule)
+class TrainingModuleAdmin(BaseAdmin):
+    list_display = ("code", "name", "department", "pass_score", "is_mandatory", "organization", "is_active")
+    list_filter = ("is_mandatory", "is_active", "organization")
+    search_fields = ("code", "name", "department")
+    autocomplete_fields = ["organization"]
+
+
+@admin.register(SelectionScoring)
+class SelectionScoringAdmin(BaseAdmin):
+    list_display = ("applicant", "interviewer", "score", "status", "remarks")
+    list_filter = ("status",)
+    search_fields = ("applicant__full_name", "interviewer__full_name", "remarks")
+    autocomplete_fields = ["applicant", "interviewer"]
+    list_select_related = ("applicant", "interviewer")

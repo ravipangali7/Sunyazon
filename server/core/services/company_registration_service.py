@@ -1,4 +1,4 @@
-"""Company registration — already-registered vs new company onboarding."""
+"""Company registration — Private Limited (PVT LTD) vs Non-Private Limited onboarding."""
 
 from __future__ import annotations
 
@@ -249,7 +249,7 @@ def register_new_company(
     shareholders: list[dict] | None = None,
     actor=None,
 ):
-    """Create a brand-new company and make the user primary admin."""
+    """Register a Private Limited (PVT LTD) company with shareholders."""
     from core.models import Country, OrgUser, Organization, Tenant, User
 
     account_type = (account_type or "").strip().lower()
@@ -275,7 +275,7 @@ def register_new_company(
         tenant=tenant,
         org_type=ORG_TYPE_MAP[account_type],
         account_type=account_type,
-        registration_mode=Organization.RegistrationMode.NEW_COMPANY,
+        registration_mode=Organization.RegistrationMode.PVT_LTD,
         registration_status=Organization.RegistrationStatus.SUBMITTED,
         company_name=name,
         slug=_unique_slug(name),
@@ -328,8 +328,132 @@ def register_new_company(
     write_audit(
         actor=actor or user,
         entity=org,
-        action="org.registered_new",
-        after={"account_type": account_type, "mode": "new_company"},
+        action="org.registered_pvt_ltd",
+        after={"account_type": account_type, "mode": "pvt_ltd"},
+        tenant=org.tenant,
+    )
+    return org
+
+
+@transaction.atomic
+def register_non_pvt_ltd_company(
+    *,
+    user,
+    account_type: str,
+    company_name: str,
+    pan_number: str,
+    managing_director_name: str,
+    address: str = "",
+    official_phone: str = "",
+    official_email: str = "",
+    country=None,
+    tenant=None,
+    actor=None,
+):
+    """Register a Non-Private Limited company (Name, PAN, MD — no shareholders)."""
+    from core.models import (
+        CompanyLeadershipSeat,
+        Country,
+        LeadershipRoleDefinition,
+        OrgUser,
+        Organization,
+        Tenant,
+        User,
+    )
+
+    account_type = (account_type or "").strip().lower()
+    if account_type not in BUSINESS_ACCOUNT_TYPES:
+        raise DomainError(
+            "Account type must be Producer, Distributor, Wholesaler, or Retailer.",
+            code="invalid_account_type",
+        )
+
+    name = (company_name or "").strip()
+    if not name:
+        raise DomainError("Company name is required.", code="company_name_required")
+
+    pan = re.sub(r"\s+", "", (pan_number or "").strip())
+    if not pan:
+        raise DomainError("PAN number is required for Non-PVT LTD companies.", code="pan_required")
+
+    md_name = (managing_director_name or "").strip()
+    if not md_name:
+        raise DomainError(
+            "Managing Director (MD) name is required for Non-PVT LTD companies.",
+            code="md_required",
+        )
+
+    existing = Organization.objects.filter(vat_pan_no__iexact=pan).first()
+    if existing:
+        raise DomainError(
+            "A company with this PAN is already registered.",
+            code="pan_exists",
+        )
+
+    if country is None:
+        country = Country.objects.filter(code="NP").first()
+        if country is None:
+            raise DomainError("Default country (NP) is missing. Run seed_geo.", code="country_missing")
+
+    if tenant is None:
+        tenant = Tenant.objects.order_by("created_at").first()
+
+    org = Organization.objects.create(
+        tenant=tenant,
+        org_type=ORG_TYPE_MAP[account_type],
+        account_type=account_type,
+        registration_mode=Organization.RegistrationMode.NON_PVT_LTD,
+        registration_status=Organization.RegistrationStatus.SUBMITTED,
+        company_name=name,
+        slug=_unique_slug(name),
+        vat_pan_no=pan,
+        managing_director_name=md_name,
+        total_capital=Decimal("0"),
+        address=address or "",
+        official_phone=official_phone or user.phone or "",
+        official_email=official_email or user.email or "",
+        country=country,
+        enabled_capabilities=list(DEFAULT_CAPABILITIES.get(account_type, ["hr", "governance", "docs"])),
+        is_active=True,
+        is_verified=False,
+    )
+
+    provision_org_structure(org, actor=actor or user)
+    roles = ensure_system_roles(org)
+
+    user.account_type = account_type
+    user.platform_role = User.PlatformRole.ADMIN
+    user.save(update_fields=["account_type", "platform_role"])
+
+    OrgUser.objects.update_or_create(
+        organization=org,
+        user=user,
+        defaults={
+            "role": roles["Primary Admin"],
+            "role_kind": OrgUser.RoleKind.ADMIN,
+            "username": pan[:64],
+            "designation": "MD",
+            "is_primary_admin": True,
+        },
+    )
+
+    create_governance_documents(org, owner=user, actor=actor or user)
+
+    md_def = LeadershipRoleDefinition.objects.filter(code="MD", is_active=True).first()
+    if md_def:
+        seat, _ = CompanyLeadershipSeat.objects.get_or_create(
+            organization=org, role_definition=md_def
+        )
+        # MD is captured as a free-text name on the org; mark seat filled for the registrar.
+        seat.user = user
+        seat.is_filled = True
+        seat.save(update_fields=["user", "is_filled"])
+
+    write_audit(
+        actor=actor or user,
+        entity=org,
+        action="org.registered_non_pvt_ltd",
+        after={"pan": pan, "account_type": account_type, "md": md_name},
         tenant=org.tenant,
     )
     return org
@@ -524,6 +648,7 @@ def serialize_organization_registration(org) -> dict[str, Any]:
         "registration_mode": org.registration_mode,
         "registration_status": org.registration_status,
         "vat_pan_no": org.vat_pan_no,
+        "managing_director_name": org.managing_director_name,
         "total_capital": float(org.total_capital or 0),
         "is_verified": org.is_verified,
         "address": org.address,

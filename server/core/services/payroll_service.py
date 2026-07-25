@@ -1,4 +1,4 @@
-"""Payroll — rules 85–88."""
+"""Payroll — rules 85–88. Uses EmployeeSalary masters + attendance OT."""
 
 from __future__ import annotations
 
@@ -11,6 +11,33 @@ from core.services.common import DomainError, notify, status_snapshot, today, wr
 from core.services.finance_service import post_journal_voucher
 
 
+def _salary_components(emp):
+    """Resolve basic / allowances / deductions / OT rate from EmployeeSalary."""
+    salary = getattr(emp, "salary", None)
+    if salary is None:
+        try:
+            from core.models import EmployeeSalary
+
+            salary = EmployeeSalary.objects.filter(employee=emp).first()
+        except Exception:
+            salary = None
+
+    if not salary:
+        return {
+            "basic": Decimal("0"),
+            "allowances": Decimal("0"),
+            "deductions": Decimal("0"),
+            "ot_rate": Decimal("0"),
+        }
+
+    return {
+        "basic": Decimal(salary.basic or 0),
+        "allowances": Decimal(salary.total_allowances or 0),
+        "deductions": Decimal(salary.deductions or 0),
+        "ot_rate": Decimal(salary.ot_rate_per_hour or 0),
+    }
+
+
 @transaction.atomic
 def process_payroll(payroll_run, *, actor=None):
     """Payroll processed → generate PayrollLines from attendance + salary masters."""
@@ -20,14 +47,14 @@ def process_payroll(payroll_run, *, actor=None):
         raise DomainError("Only draft payroll can be processed", code="invalid_status")
 
     before = status_snapshot(payroll_run, ["status"])
-    # period_month = YYYY-MM
     year, month = payroll_run.period_month.split("-")
     year, month = int(year), int(month)
 
     employees = Employee.objects.filter(
         organization=payroll_run.organization,
         status__in={Employee.Status.ACTIVE, Employee.Status.ON_LEAVE},
-    )
+    ).select_related("salary")
+
     for emp in employees:
         ot = (
             Attendance.objects.filter(
@@ -35,18 +62,18 @@ def process_payroll(payroll_run, *, actor=None):
             ).aggregate(s=Sum("ot_hours"))["s"]
             or 0
         )
-        # Placeholder salary components — real masters can extend later
-        basic = Decimal("0")
-        ot_amount = Decimal(ot or 0) * Decimal("100")  # rate placeholder
+        comps = _salary_components(emp)
+        ot_amount = Decimal(ot or 0) * comps["ot_rate"]
+        net = comps["basic"] + comps["allowances"] + ot_amount - comps["deductions"]
         PayrollLine.objects.update_or_create(
             payroll_run=payroll_run,
             employee=emp,
             defaults={
-                "basic": basic,
-                "allowances": 0,
-                "deductions": 0,
+                "basic": comps["basic"],
+                "allowances": comps["allowances"],
+                "deductions": comps["deductions"],
                 "ot_amount": ot_amount,
-                "net_pay": basic + ot_amount,
+                "net_pay": net,
             },
         )
 
@@ -82,7 +109,6 @@ def pay_payroll(payroll_run, *, cash_account=None, created_by=None, actor=None):
     total = sum((Decimal(l.net_pay or 0) for l in payroll_run.lines.all()), Decimal("0"))
     voucher = None
     if total > 0:
-        # Minimal JV — accounts optional placeholders
         expense = ChartOfAccount.objects.filter(
             organization=payroll_run.organization, code__startswith="6"
         ).first()

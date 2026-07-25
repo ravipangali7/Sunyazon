@@ -8,7 +8,7 @@ import {
 } from "./nav-items";
 import { useTheme } from "../theme-provider";
 import { useAuth } from "@/lib/auth";
-import { modulesToNav, resolveModuleIcon } from "@/lib/modules";
+import { groupModules, modulesToNav, resolveModuleIcon } from "@/lib/modules";
 import { resolveDepartmentScope, type DepartmentScope } from "@/lib/department-menus";
 import { useMenus, useGlobalSearch } from "@/hooks/use-enterprise";
 
@@ -65,13 +65,13 @@ function useScopedNav() {
 
   return useMemo(() => {
     const superAdmin = isSuperAdminUser(user);
-    const systemBase: NavItem[] = [
-      {
-        to: "/apps",
-        label: superAdmin ? "Super Admin" : "All Apps",
-        icon: superAdmin ? ShieldCheck : LayoutGrid,
-      },
-    ];
+    const appsLauncherItem: NavItem = {
+      to: "/apps",
+      label: superAdmin ? "Super Admin" : "All Apps",
+      icon: superAdmin ? ShieldCheck : LayoutGrid,
+    };
+    // Regular users reach the apps launcher via the topbar AppSwitcher, not the sidebar.
+    const systemBase: NavItem[] = superAdmin ? [appsLauncherItem] : [];
 
     // Prefer database-driven menus when available
     const dbNav: NavItem[] = (menuTree || [])
@@ -119,8 +119,8 @@ function useScopedNav() {
         consumer: [] as NavItem[],
         admin: [] as NavItem[],
         system: systemBase,
-        more: [...deptNav.slice(3), ...systemBase],
-        all: [...deptNav, ...systemBase, backHome],
+        more: [...deptNav.slice(3), appsLauncherItem],
+        all: [...deptNav, appsLauncherItem, backHome],
         primary,
         department,
         hash,
@@ -144,7 +144,7 @@ function useScopedNav() {
         admin: [] as NavItem[],
         system,
         more: dbNav.filter((n) => !primary.some((p) => p.to === n.to)),
-        all: [...dbNav, ...systemBase],
+        all: [...dbNav, appsLauncherItem],
         primary,
         department: null as DepartmentScope | null,
         hash,
@@ -185,7 +185,7 @@ function useScopedNav() {
       admin,
       system,
       more,
-      all: allowed.length ? [...allowed, ...system] : ALL_NAV,
+      all: allowed.length ? [...allowed, ...system, appsLauncherItem] : ALL_NAV,
       primary: primary.length >= 2 ? primary : ([
         { to: "/", label: "Home", icon: PRIMARY_NAV[0].icon },
         ...allowed.slice(0, 3),
@@ -234,7 +234,9 @@ function DesktopSidebar() {
         {!scoped && nav.admin.length > 0 && (
           <NavGroup label="Admin" items={nav.admin} path={path} hash={nav.hash} />
         )}
-        <NavGroup label="System" items={nav.system} path={path} hash={nav.hash} />
+        {nav.system.length > 0 && (
+          <NavGroup label="System" items={nav.system} path={path} hash={nav.hash} />
+        )}
       </nav>
       <div className="p-3 border-t border-sidebar-border shrink-0">
         <div className="flex items-center gap-3 rounded-lg p-2 bg-sidebar-accent/40">
@@ -407,6 +409,7 @@ function DesktopTopBar({ title, subtitle, actions, onSearch }: {
           <Command className="h-2.5 w-2.5" />K
         </kbd>
       </button>
+      <AppSwitcher />
       <ThemeToggle />
       <Link to="/notifications" className="relative h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary">
         <Bell className="h-4 w-4" />
@@ -414,6 +417,110 @@ function DesktopTopBar({ title, subtitle, actions, onSearch }: {
       </Link>
       {actions}
     </header>
+  );
+}
+
+function AppSwitcher() {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const modules = user?.portal?.modules;
+
+  const sections = useMemo(() => {
+    if (modules?.length) {
+      const groups = groupModules(modules);
+      return [
+        { key: "workspace", label: "Workspace" },
+        { key: "consumer", label: "Consumer" },
+        { key: "admin", label: "Administration" },
+        { key: "system", label: "System" },
+      ]
+        .map((s) => ({
+          label: s.label,
+          items: (groups[s.key] || []).map((m) => ({
+            key: m.code,
+            to: m.route_path,
+            label: m.name,
+            icon: resolveModuleIcon(m.icon),
+            color: m.color as string | undefined,
+          })),
+        }))
+        .filter((s) => s.items.length > 0);
+    }
+    // Preview / no assigned modules — fall back to the static catalog
+    const toItems = (items: NavItem[]) =>
+      items.map((n) => ({ key: n.to, to: n.to, label: n.label, icon: n.icon, color: undefined as string | undefined }));
+    return [
+      { label: "Workspace", items: toItems(WORKSPACE_NAV) },
+      { label: "Consumer", items: toItems(CONSUMER_NAV) },
+      { label: "Administration", items: toItems(ADMIN_NAV) },
+    ];
+  }, [modules]);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="All Apps"
+        aria-label="All Apps"
+        aria-expanded={open}
+        className={`h-9 w-9 grid place-items-center rounded-lg transition-colors ${
+          open ? "bg-secondary" : "hover:bg-secondary"
+        }`}
+      >
+        <LayoutGrid className="h-4 w-4" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 z-50 w-[22rem] rounded-xl bg-popover border border-border shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 h-11 border-b border-border">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">All Apps</span>
+              <Link
+                to="/apps"
+                onClick={() => setOpen(false)}
+                className="text-[11px] font-semibold hover:underline"
+                style={{ color: "var(--color-primary)" }}
+              >
+                Open launcher
+              </Link>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-3">
+              {sections.map((s) => (
+                <div key={s.label} className="mb-3 last:mb-0">
+                  <div className="px-1 pb-1.5 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                    {s.label}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {s.items.map((it) => (
+                      <Link
+                        key={it.key}
+                        to={it.to}
+                        onClick={() => setOpen(false)}
+                        className="flex flex-col items-center gap-1.5 rounded-lg p-2.5 hover:bg-secondary transition-colors"
+                      >
+                        <span
+                          className="h-9 w-9 rounded-lg grid place-items-center"
+                          style={
+                            it.color
+                              ? { backgroundColor: `${it.color}22`, color: it.color }
+                              : { backgroundColor: "var(--color-secondary)" }
+                          }
+                        >
+                          <it.icon className="h-5 w-5" strokeWidth={2} />
+                        </span>
+                        <span className="text-[11px] font-medium text-center leading-tight truncate w-full">
+                          {it.label}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -452,6 +559,9 @@ function MobileTopBar({ title, onSearch }: { title: string; onSearch: () => void
         <button onClick={onSearch} className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary" aria-label="Search">
           <Search className="h-4 w-4" />
         </button>
+        <Link to="/apps" className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary" aria-label="All Apps" title="All Apps">
+          <LayoutGrid className="h-4 w-4" />
+        </Link>
         <ThemeToggle />
         <Link to="/notifications" className="relative h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary">
           <Bell className="h-4 w-4" />

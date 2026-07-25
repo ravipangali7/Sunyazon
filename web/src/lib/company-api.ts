@@ -143,6 +143,7 @@ export const companyApi = {
     registration_mode: string;
     company_name: string;
     pan_number?: string;
+    managing_director_name?: string;
     total_capital?: number | string;
     address?: string;
     official_phone?: string;
@@ -157,6 +158,9 @@ export const companyApi = {
     form.append("registration_mode", payload.registration_mode);
     form.append("company_name", payload.company_name);
     if (payload.pan_number) form.append("pan_number", payload.pan_number);
+    if (payload.managing_director_name) {
+      form.append("managing_director_name", payload.managing_director_name);
+    }
     if (payload.total_capital != null) form.append("total_capital", String(payload.total_capital));
     if (payload.address) form.append("address", payload.address);
     if (payload.official_phone) form.append("official_phone", payload.official_phone);
@@ -229,6 +233,7 @@ export const companyApi = {
     position_id?: string;
     department?: string;
     publish?: boolean;
+    hiring_manager_id?: string;
   }) =>
     apiFetch<JobVacancy>("/hr/vacancies/", {
       method: "POST",
