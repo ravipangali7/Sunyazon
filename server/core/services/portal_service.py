@@ -178,7 +178,7 @@ def resolve_portal(user: User, membership: OrgUser | None = None) -> PortalResol
         modules = _all_active_modules()
         return PortalResolution(
             portal="super_admin",
-            redirect_to="/apps",
+            redirect_to="/super-admin",
             show_module_launcher=True,
             role_kind=User.PlatformRole.ADMIN,
             account_type=User.AccountType.SUPER_ADMIN,

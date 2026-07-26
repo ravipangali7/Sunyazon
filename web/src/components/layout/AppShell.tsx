@@ -381,7 +381,7 @@ function DesktopTopBar({ title, subtitle, actions, onSearch }: {
   const { user } = useAuth();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const superAdmin = isSuperAdminUser(user);
-  const showSuperAdminHome = superAdmin && path !== "/apps";
+  const showSuperAdminHome = superAdmin && !path.startsWith("/super-admin") && path !== "/apps";
 
   return (
     <header className="hidden lg:flex sticky top-0 z-20 h-16 items-center gap-4 border-b border-border bg-background/80 backdrop-blur px-8">
@@ -391,7 +391,7 @@ function DesktopTopBar({ title, subtitle, actions, onSearch }: {
       </div>
       {showSuperAdminHome && (
         <Link
-          to="/apps"
+          to="/super-admin"
           className="h-9 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-border hover:bg-secondary shrink-0"
           title="Back to Super Admin dashboard"
         >
@@ -527,13 +527,13 @@ function AppSwitcher() {
 function MobileTopBar({ title, onSearch }: { title: string; onSearch: () => void }) {
   const { user } = useAuth();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const showSuperAdminHome = isSuperAdminUser(user) && path !== "/apps";
+  const showSuperAdminHome = isSuperAdminUser(user) && !path.startsWith("/super-admin") && path !== "/apps";
 
   return (
     <header className="lg:hidden sticky top-0 z-20 bg-background/85 backdrop-blur border-b border-border">
       <div className="flex items-center h-14 px-4 gap-3">
         <Link
-          to={showSuperAdminHome ? "/apps" : "/"}
+          to={showSuperAdminHome ? "/super-admin" : "/"}
           className="h-8 w-8 rounded-lg grid place-items-center font-black text-sm shrink-0"
           style={{ backgroundColor: "var(--color-primary)", color: "var(--color-primary-foreground)" }}
           title={showSuperAdminHome ? "Back to Super Admin dashboard" : undefined}
@@ -548,7 +548,7 @@ function MobileTopBar({ title, onSearch }: { title: string; onSearch: () => void
         </div>
         {showSuperAdminHome && (
           <Link
-            to="/apps"
+            to="/super-admin"
             className="h-9 w-9 grid place-items-center rounded-lg hover:bg-secondary"
             aria-label="Back to Super Admin dashboard"
             title="Back to Super Admin dashboard"

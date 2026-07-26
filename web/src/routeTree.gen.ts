@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as SuperAdminRouteImport } from './routes/super-admin'
 import { Route as StoresRouteImport } from './routes/stores'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SalesRouteImport } from './routes/sales'
@@ -42,12 +43,22 @@ import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AppsRouteImport } from './routes/apps'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SuperAdminIndexRouteImport } from './routes/super-admin.index'
+import { Route as SuperAdminUsersRouteImport } from './routes/super-admin.users'
+import { Route as SuperAdminSettingsRouteImport } from './routes/super-admin.settings'
+import { Route as SuperAdminRolesRouteImport } from './routes/super-admin.roles'
+import { Route as SuperAdminCompaniesRouteImport } from './routes/super-admin.companies'
 import { Route as RegisterCompanyRouteImport } from './routes/register.company'
 import { Route as PortalPortalTypeRouteImport } from './routes/portal.$portalType'
 
 const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuperAdminRoute = SuperAdminRouteImport.update({
+  id: '/super-admin',
+  path: '/super-admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StoresRoute = StoresRouteImport.update({
@@ -210,6 +221,31 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SuperAdminIndexRoute = SuperAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminUsersRoute = SuperAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminSettingsRoute = SuperAdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminRolesRoute = SuperAdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminCompaniesRoute = SuperAdminCompaniesRouteImport.update({
+  id: '/companies',
+  path: '/companies',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
 const RegisterCompanyRoute = RegisterCompanyRouteImport.update({
   id: '/register/company',
   path: '/register/company',
@@ -254,9 +290,15 @@ export interface FileRoutesByFullPath {
   '/sales': typeof SalesRoute
   '/settings': typeof SettingsRoute
   '/stores': typeof StoresRoute
+  '/super-admin': typeof SuperAdminRouteWithChildren
   '/tasks': typeof TasksRoute
   '/portal/$portalType': typeof PortalPortalTypeRoute
   '/register/company': typeof RegisterCompanyRoute
+  '/super-admin/companies': typeof SuperAdminCompaniesRoute
+  '/super-admin/roles': typeof SuperAdminRolesRoute
+  '/super-admin/settings': typeof SuperAdminSettingsRoute
+  '/super-admin/users': typeof SuperAdminUsersRoute
+  '/super-admin/': typeof SuperAdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -294,6 +336,11 @@ export interface FileRoutesByTo {
   '/tasks': typeof TasksRoute
   '/portal/$portalType': typeof PortalPortalTypeRoute
   '/register/company': typeof RegisterCompanyRoute
+  '/super-admin/companies': typeof SuperAdminCompaniesRoute
+  '/super-admin/roles': typeof SuperAdminRolesRoute
+  '/super-admin/settings': typeof SuperAdminSettingsRoute
+  '/super-admin/users': typeof SuperAdminUsersRoute
+  '/super-admin': typeof SuperAdminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -329,9 +376,15 @@ export interface FileRoutesById {
   '/sales': typeof SalesRoute
   '/settings': typeof SettingsRoute
   '/stores': typeof StoresRoute
+  '/super-admin': typeof SuperAdminRouteWithChildren
   '/tasks': typeof TasksRoute
   '/portal/$portalType': typeof PortalPortalTypeRoute
   '/register/company': typeof RegisterCompanyRoute
+  '/super-admin/companies': typeof SuperAdminCompaniesRoute
+  '/super-admin/roles': typeof SuperAdminRolesRoute
+  '/super-admin/settings': typeof SuperAdminSettingsRoute
+  '/super-admin/users': typeof SuperAdminUsersRoute
+  '/super-admin/': typeof SuperAdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -368,9 +421,15 @@ export interface FileRouteTypes {
     | '/sales'
     | '/settings'
     | '/stores'
+    | '/super-admin'
     | '/tasks'
     | '/portal/$portalType'
     | '/register/company'
+    | '/super-admin/companies'
+    | '/super-admin/roles'
+    | '/super-admin/settings'
+    | '/super-admin/users'
+    | '/super-admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -408,6 +467,11 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/portal/$portalType'
     | '/register/company'
+    | '/super-admin/companies'
+    | '/super-admin/roles'
+    | '/super-admin/settings'
+    | '/super-admin/users'
+    | '/super-admin'
   id:
     | '__root__'
     | '/'
@@ -442,9 +506,15 @@ export interface FileRouteTypes {
     | '/sales'
     | '/settings'
     | '/stores'
+    | '/super-admin'
     | '/tasks'
     | '/portal/$portalType'
     | '/register/company'
+    | '/super-admin/companies'
+    | '/super-admin/roles'
+    | '/super-admin/settings'
+    | '/super-admin/users'
+    | '/super-admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -480,6 +550,7 @@ export interface RootRouteChildren {
   SalesRoute: typeof SalesRoute
   SettingsRoute: typeof SettingsRoute
   StoresRoute: typeof StoresRoute
+  SuperAdminRoute: typeof SuperAdminRouteWithChildren
   TasksRoute: typeof TasksRoute
   PortalPortalTypeRoute: typeof PortalPortalTypeRoute
   RegisterCompanyRoute: typeof RegisterCompanyRoute
@@ -492,6 +563,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/super-admin': {
+      id: '/super-admin'
+      path: '/super-admin'
+      fullPath: '/super-admin'
+      preLoaderRoute: typeof SuperAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stores': {
@@ -718,6 +796,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/super-admin/': {
+      id: '/super-admin/'
+      path: '/'
+      fullPath: '/super-admin/'
+      preLoaderRoute: typeof SuperAdminIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/users': {
+      id: '/super-admin/users'
+      path: '/users'
+      fullPath: '/super-admin/users'
+      preLoaderRoute: typeof SuperAdminUsersRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/settings': {
+      id: '/super-admin/settings'
+      path: '/settings'
+      fullPath: '/super-admin/settings'
+      preLoaderRoute: typeof SuperAdminSettingsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/roles': {
+      id: '/super-admin/roles'
+      path: '/roles'
+      fullPath: '/super-admin/roles'
+      preLoaderRoute: typeof SuperAdminRolesRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/companies': {
+      id: '/super-admin/companies'
+      path: '/companies'
+      fullPath: '/super-admin/companies'
+      preLoaderRoute: typeof SuperAdminCompaniesRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
     '/register/company': {
       id: '/register/company'
       path: '/register/company'
@@ -734,6 +847,26 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface SuperAdminRouteChildren {
+  SuperAdminCompaniesRoute: typeof SuperAdminCompaniesRoute
+  SuperAdminRolesRoute: typeof SuperAdminRolesRoute
+  SuperAdminSettingsRoute: typeof SuperAdminSettingsRoute
+  SuperAdminUsersRoute: typeof SuperAdminUsersRoute
+  SuperAdminIndexRoute: typeof SuperAdminIndexRoute
+}
+
+const SuperAdminRouteChildren: SuperAdminRouteChildren = {
+  SuperAdminCompaniesRoute: SuperAdminCompaniesRoute,
+  SuperAdminRolesRoute: SuperAdminRolesRoute,
+  SuperAdminSettingsRoute: SuperAdminSettingsRoute,
+  SuperAdminUsersRoute: SuperAdminUsersRoute,
+  SuperAdminIndexRoute: SuperAdminIndexRoute,
+}
+
+const SuperAdminRouteWithChildren = SuperAdminRoute._addFileChildren(
+  SuperAdminRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -768,6 +901,7 @@ const rootRouteChildren: RootRouteChildren = {
   SalesRoute: SalesRoute,
   SettingsRoute: SettingsRoute,
   StoresRoute: StoresRoute,
+  SuperAdminRoute: SuperAdminRouteWithChildren,
   TasksRoute: TasksRoute,
   PortalPortalTypeRoute: PortalPortalTypeRoute,
   RegisterCompanyRoute: RegisterCompanyRoute,
@@ -775,13 +909,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
