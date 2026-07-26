@@ -56,7 +56,6 @@ export type AuthUser = {
 type AuthState = {
   user: AuthUser | null;
   loading: boolean;
-  isSuperAdmin: boolean;
   login: (phone: string, password: string, remember?: boolean) => Promise<AuthUser>;
   register: (payload: {
     full_name: string;
@@ -71,15 +70,6 @@ type AuthState = {
   hasModule: (code: string) => boolean;
   can: (moduleCode: string, action?: string) => boolean;
 };
-
-export function userIsSuperAdmin(user: AuthUser | null | undefined): boolean {
-  if (!user) return false;
-  return (
-    user.is_superuser ||
-    user.account_type === "super_admin" ||
-    user.portal?.portal === "super_admin"
-  );
-}
 
 const AuthContext = createContext<AuthState | null>(null);
 
@@ -197,11 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  const isSuperAdmin = userIsSuperAdmin(user);
-
   const value = useMemo(
-    () => ({ user, loading, isSuperAdmin, login, register, logout, refresh, hasModule, can }),
-    [user, loading, isSuperAdmin, login, register, logout, refresh, hasModule, can],
+    () => ({ user, loading, login, register, logout, refresh, hasModule, can }),
+    [user, loading, login, register, logout, refresh, hasModule, can],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
