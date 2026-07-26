@@ -1366,6 +1366,17 @@ class GovernanceView(DomainAuthMixin, APIView):
             ]
         return Response(
             {
+                "organization": (
+                    {
+                        "id": str(org.id),
+                        "company_name": org.company_name,
+                        "registration_mode": org.registration_mode,
+                        "vat_pan_no": org.vat_pan_no,
+                        "managing_director_name": org.managing_director_name,
+                    }
+                    if org
+                    else None
+                ),
                 "board": board,
                 "meetings": meetings,
                 "resolutions": board,

@@ -272,6 +272,13 @@ export const domainApi = {
     }>("/payments/"),
   governance: () =>
     apiFetch<{
+      organization: {
+        id: string;
+        company_name: string;
+        registration_mode: string;
+        vat_pan_no: string | null;
+        managing_director_name: string;
+      } | null;
       board: { id: string; title: string; status: string; signed_at: string | null }[];
       meetings: { id: string; title: string; scheduled_at: string | null; status: string }[];
       resolutions: { id: string; title: string; status: string; signed_at: string | null }[];

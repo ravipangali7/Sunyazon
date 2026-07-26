@@ -32,6 +32,8 @@ function GovernancePage() {
   const leadership = data?.leadership ?? [];
   const shareholders = data?.shareholders ?? [];
   const documents = data?.documents ?? [];
+  const organization = data?.organization;
+  const isNonPvtLtd = organization?.registration_mode === "non_pvt_ltd";
 
   const govDocs = useQuery({
     queryKey: ["governance-documents"],
@@ -76,7 +78,11 @@ function GovernancePage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <Mini label="Board items" value={board.length} sub="tracked" />
           <Mini label="Leadership seats" value={leadership.length} sub={`${leadership.filter((l) => l.is_filled).length} filled`} />
-          <Mini label="Shareholders" value={shareholders.length} sub="registered" />
+          <Mini
+            label={isNonPvtLtd ? "MD" : "Shareholders"}
+            value={isNonPvtLtd ? (organization?.managing_director_name ? 1 : 0) : shareholders.length}
+            sub={isNonPvtLtd ? "managing director" : "registered"}
+          />
           <Mini label="Governance docs" value={docs.length} sub="niyamawali / prabandhapatra" />
         </div>
 
@@ -109,22 +115,45 @@ function GovernancePage() {
           <div className="rounded-2xl bg-card border border-border p-5">
             <div className="flex items-center gap-2 mb-3">
               <Users className="h-4 w-4 text-primary" />
-              <div className="font-semibold text-sm">Shareholders</div>
-            </div>
-            {shareholders.map((s) => (
-              <div key={s.id} className="py-2 border-b border-border/50 last:border-0 flex justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">
-                    {s.full_name || "—"}
-                    {s.is_default ? <span className="ml-2 text-[10px] text-primary">Default</span> : null}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">{s.share_units} units</div>
-                </div>
-                <div className="text-sm font-semibold tabular-nums">{s.percentage}%</div>
+              <div className="font-semibold text-sm">
+                {isNonPvtLtd ? "Company leadership (MD)" : "Shareholders"}
               </div>
-            ))}
-            {!shareholders.length && (
-              <div className="text-xs text-muted-foreground">No shareholders recorded.</div>
+            </div>
+            {isNonPvtLtd ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between gap-2 border-b border-border/50 py-2">
+                  <span className="text-muted-foreground">Name</span>
+                  <span className="font-semibold">{organization?.company_name || "—"}</span>
+                </div>
+                <div className="flex justify-between gap-2 border-b border-border/50 py-2">
+                  <span className="text-muted-foreground">PAN Number</span>
+                  <span className="font-semibold">{organization?.vat_pan_no || "—"}</span>
+                </div>
+                <div className="flex justify-between gap-2 py-2">
+                  <span className="text-muted-foreground">MD</span>
+                  <span className="font-semibold">
+                    {organization?.managing_director_name || "—"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <>
+                {shareholders.map((s) => (
+                  <div key={s.id} className="py-2 border-b border-border/50 last:border-0 flex justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {s.full_name || "—"}
+                        {s.is_default ? <span className="ml-2 text-[10px] text-primary">Default</span> : null}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">{s.share_units} units</div>
+                    </div>
+                    <div className="text-sm font-semibold tabular-nums">{s.percentage}%</div>
+                  </div>
+                ))}
+                {!shareholders.length && (
+                  <div className="text-xs text-muted-foreground">No shareholders recorded.</div>
+                )}
+              </>
             )}
           </div>
 

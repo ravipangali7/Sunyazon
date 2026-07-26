@@ -20,7 +20,7 @@ export const Route = createFileRoute("/register/company")({
       {
         name: "description",
         content:
-          "Register a Private Limited (PVT LTD) or Non-Private Limited company for Producer, Distributor, Wholesaler, or Retailer accounts.",
+          "Register a PVT LTD or NON PVT LTD company for Producer, Distributor, Wholesaler, or Retailer accounts.",
       },
     ],
   }),
@@ -81,6 +81,45 @@ function CompanyRegistrationPage() {
     return ["Company type", "Company details", "Shareholders", "Review"];
   }, [mode]);
 
+  useEffect(() => {
+    setStep((s) => Math.min(s, steps.length - 1));
+  }, [steps.length]);
+
+  function selectMode(next: Mode) {
+    setMode(next);
+    setError(null);
+    setLookupMsg(null);
+    setStep(0);
+  }
+
+  function validateBeforeContinue(): boolean {
+    setError(null);
+    if (step === 1) {
+      if (!companyName.trim()) {
+        setError("Company name is required.");
+        return false;
+      }
+      if (mode === "non_pvt_ltd") {
+        if (!pan.trim()) {
+          setError("PAN number is required.");
+          return false;
+        }
+        if (!mdName.trim()) {
+          setError("MD (Managing Director) is required.");
+          return false;
+        }
+      }
+    }
+    if (step === 2 && mode === "pvt_ltd") {
+      const named = shareholders.filter((s) => s.full_name.trim());
+      if (!named.length) {
+        setError("Add at least one shareholder with a name.");
+        return false;
+      }
+    }
+    return true;
+  }
+
   async function lookupPan() {
     setLookupMsg(null);
     if (!pan.trim()) return;
@@ -116,8 +155,8 @@ function CompanyRegistrationPage() {
     try {
       if (!companyName.trim()) throw new Error("Company name is required.");
       if (mode === "non_pvt_ltd") {
-        if (!pan.trim()) throw new Error("PAN number is required for Non-PVT LTD companies.");
-        if (!mdName.trim()) throw new Error("Managing Director (MD) is required.");
+        if (!pan.trim()) throw new Error("PAN number is required for NON PVT LTD companies.");
+        if (!mdName.trim()) throw new Error("MD (Managing Director) is required.");
       }
       const res = await companyApi.register({
         account_type: user.account_type,
@@ -214,13 +253,10 @@ function CompanyRegistrationPage() {
 
           {step === 0 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-white">Choose registration type</h2>
+              <h2 className="text-lg font-semibold text-white">Choose company type</h2>
               <button
                 type="button"
-                onClick={() => {
-                  setMode("pvt_ltd");
-                  setStep(0);
-                }}
+                onClick={() => selectMode("pvt_ltd")}
                 className={`w-full text-left p-4 rounded-xl border transition ${
                   mode === "pvt_ltd"
                     ? "border-[#F25C05]/60 bg-[#F25C05]/10"
@@ -229,7 +265,7 @@ function CompanyRegistrationPage() {
               >
                 <div className="flex items-center gap-3 text-white font-semibold">
                   <Building2 className="h-5 w-5 text-[#F25C05]" />
-                  Private Limited (PVT LTD)
+                  PVT LTD
                 </div>
                 <p className="mt-1 text-xs text-white/45 pl-8">
                   Total capital, shareholders, Niyamawali & Prabandhapatra (drafted from templates)
@@ -237,10 +273,7 @@ function CompanyRegistrationPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setMode("non_pvt_ltd");
-                  setStep(0);
-                }}
+                onClick={() => selectMode("non_pvt_ltd")}
                 className={`w-full text-left p-4 rounded-xl border transition ${
                   mode === "non_pvt_ltd"
                     ? "border-[#F25C05]/60 bg-[#F25C05]/10"
@@ -249,10 +282,10 @@ function CompanyRegistrationPage() {
               >
                 <div className="flex items-center gap-3 text-white font-semibold">
                   <FileText className="h-5 w-5 text-[#F25C05]" />
-                  Non-Private Limited (Non-PVT LTD)
+                  NON PVT LTD
                 </div>
                 <p className="mt-1 text-xs text-white/45 pl-8">
-                  Name, PAN number, and Managing Director (MD)
+                  Name, PAN Number, and MD (Managing Director) — no shareholders
                 </p>
               </button>
             </div>
@@ -401,19 +434,12 @@ function CompanyRegistrationPage() {
           {step === reviewStep && (
             <div className="space-y-3 text-sm text-white/80">
               <h2 className="text-lg font-semibold text-white">Review</h2>
-              <Row
-                label="Type"
-                value={
-                  mode === "pvt_ltd"
-                    ? "Private Limited (PVT LTD)"
-                    : "Non-Private Limited (Non-PVT LTD)"
-                }
-              />
+              <Row label="Type" value={mode === "pvt_ltd" ? "PVT LTD" : "NON PVT LTD"} />
               <Row label="Name" value={companyName || "—"} />
               {mode === "non_pvt_ltd" && (
                 <>
-                  <Row label="PAN" value={pan || "—"} />
-                  <Row label="MD" value={mdName || "—"} />
+                  <Row label="PAN Number" value={pan || "—"} />
+                  <Row label="MD (Managing Director)" value={mdName || "—"} />
                 </>
               )}
               {mode === "pvt_ltd" && (
@@ -442,7 +468,10 @@ function CompanyRegistrationPage() {
             {step < steps.length - 1 ? (
               <button
                 type="button"
-                onClick={() => setStep((s) => s + 1)}
+                onClick={() => {
+                  if (!validateBeforeContinue()) return;
+                  setStep((s) => s + 1);
+                }}
                 className="h-10 px-5 rounded-xl text-sm font-semibold flex items-center gap-1"
                 style={{ background: "linear-gradient(135deg, #F25C05, #FF6F1F)", color: "#111" }}
               >

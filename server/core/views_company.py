@@ -87,7 +87,7 @@ class CompanyRegistrationOptionsView(APIView):
                 "registration_modes": [
                     {
                         "value": "pvt_ltd",
-                        "label": "Private Limited (PVT LTD)",
+                        "label": "PVT LTD",
                         "fields": [
                             "total_capital",
                             "shareholders",
@@ -97,7 +97,7 @@ class CompanyRegistrationOptionsView(APIView):
                     },
                     {
                         "value": "non_pvt_ltd",
-                        "label": "Non-Private Limited (Non-PVT LTD)",
+                        "label": "NON PVT LTD",
                         "fields": [
                             "company_name",
                             "pan_number",
@@ -222,7 +222,7 @@ class CompanyRegistrationView(APIView):
             else:
                 return Response(
                     {
-                        "detail": "Choose Private Limited (PVT LTD) or Non-Private Limited (Non-PVT LTD).",
+                        "detail": "Choose PVT LTD or NON PVT LTD.",
                         "code": "mode_required",
                     },
                     status=status.HTTP_400_BAD_REQUEST,

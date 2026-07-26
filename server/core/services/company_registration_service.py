@@ -350,7 +350,7 @@ def register_non_pvt_ltd_company(
     tenant=None,
     actor=None,
 ):
-    """Register a Non-Private Limited company (Name, PAN, MD — no shareholders)."""
+    """Register a NON PVT LTD company (Name, PAN, MD — no shareholders)."""
     from core.models import (
         CompanyLeadershipSeat,
         Country,
@@ -374,12 +374,12 @@ def register_non_pvt_ltd_company(
 
     pan = re.sub(r"\s+", "", (pan_number or "").strip())
     if not pan:
-        raise DomainError("PAN number is required for Non-PVT LTD companies.", code="pan_required")
+        raise DomainError("PAN number is required for NON PVT LTD companies.", code="pan_required")
 
     md_name = (managing_director_name or "").strip()
     if not md_name:
         raise DomainError(
-            "Managing Director (MD) name is required for Non-PVT LTD companies.",
+            "MD (Managing Director) name is required for NON PVT LTD companies.",
             code="md_required",
         )
 

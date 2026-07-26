@@ -25,8 +25,8 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True,
                 choices=[
-                    ("pvt_ltd", "Private Limited (PVT LTD)"),
-                    ("non_pvt_ltd", "Non-Private Limited (Non-PVT LTD)"),
+                    ("pvt_ltd", "PVT LTD"),
+                    ("non_pvt_ltd", "NON PVT LTD"),
                     ("already_registered", "Already Registered Company"),
                     ("new_company", "New Company"),
                 ],

@@ -67,8 +67,8 @@ class Organization(TenantScopedModel, TimeStampedModel):
         CUSTOM = "custom", "Custom"
 
     class RegistrationMode(models.TextChoices):
-        PVT_LTD = "pvt_ltd", "Private Limited (PVT LTD)"
-        NON_PVT_LTD = "non_pvt_ltd", "Non-Private Limited (Non-PVT LTD)"
+        PVT_LTD = "pvt_ltd", "PVT LTD"
+        NON_PVT_LTD = "non_pvt_ltd", "NON PVT LTD"
         # Legacy values kept for existing rows
         ALREADY_REGISTERED = "already_registered", "Already Registered Company"
         NEW_COMPANY = "new_company", "New Company"
@@ -121,7 +121,7 @@ class Organization(TenantScopedModel, TimeStampedModel):
         db_index=True,
         null=True,
         blank=True,
-        help_text="Required for already-registered companies.",
+        help_text="Required for NON PVT LTD registration.",
     )
     total_capital = models.DecimalField(
         max_digits=18,
